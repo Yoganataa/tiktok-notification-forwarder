@@ -10,6 +10,8 @@ RUN npm ci
 
 COPY . .
 
+ENV DIRECT_URL="postgresql://postgres.vieqovrmlhualeyghwnz:Qr_2@7bpZVx$a@P@aws-1-us-east-1.pooler.supabase.com:5432/postgres"
+
 RUN npx prisma generate
 RUN npm run build
 
