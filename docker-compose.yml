@@ -3,6 +3,6 @@ version: "3.9"
 services:
   bot:
     build: .
-    image: my-bot:latest
-    container_name: my-bot
+    image: tiktok-forwarder:latest
+    container_name: tiktok-forwarder
     restart: unless-stopped

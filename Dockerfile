@@ -5,9 +5,13 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY prisma ./prisma/
+
 RUN npm ci
 
-COPY prisma ./prisma
+# Prisma Client WAJIB digenerate sebelum tsc
+RUN npx prisma generate
+
 COPY . .
 
 RUN npm run build
@@ -21,11 +25,10 @@ ENV NODE_ENV=production
 
 RUN apk add --no-cache openssl
 
-# Create non-root user
+# Non-root user
 RUN addgroup -g 10001 appgroup \
  && adduser -D -u 10001 -G appgroup appuser
 
-# Copy runtime artifacts only
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
@@ -35,5 +38,4 @@ RUN chown -R appuser:appgroup /app
 
 USER appuser
 
-# Prisma generate dijalankan SAAT RUNTIME (env sudah ada)
-CMD ["sh", "-c", "npx prisma generate && node dist/index.js"]
+CMD ["node", "dist/index.js"]
