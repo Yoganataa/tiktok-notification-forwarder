@@ -1,4 +1,3 @@
-# docker-compose.yml
 version: "3.9"
 
 services:
@@ -6,6 +5,4 @@ services:
     build: .
     image: my-bot:latest
     container_name: my-bot
-    env_file:
-      - .env
     restart: unless-stopped
