@@ -1,5 +1,6 @@
+# Dockerfile
 # ---------- Stage 1: Builder ----------
-FROM node:22-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -10,31 +11,29 @@ RUN npm ci
 
 COPY . .
 
-ENV DIRECT_URL="postgresql://postgres.vieqovrmlhualeyghwnz:Qr_2@7bpZVx$a@P@aws-1-us-east-1.pooler.supabase.com:5432/postgres"
-
 RUN npx prisma generate
 RUN npm run build
 
 
 # ---------- Stage 2: Runner ----------
-FROM node:22-alpine AS runner
+FROM node:20-alpine
 
 WORKDIR /app
 ENV NODE_ENV=production
 
 RUN apk add --no-cache openssl
 
-# Choreo-compliant user
+# Create non-root user
 RUN addgroup -g 10001 appgroup \
  && adduser -D -u 10001 -G appgroup appuser
 
-COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
-RUN mkdir -p logs && chown -R appuser:appgroup /app
+RUN chown -R appuser:appgroup /app
 
-USER 10001
+USER appuser
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["node", "dist/index.js"]
