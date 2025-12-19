@@ -1,9 +1,6 @@
 // src/commands/index.ts
-import { mappingCommand } from './mapping';
-import { menuCommand } from './menu'; 
-import { adminCommand } from './admin'; 
-export const commandList = [
-  mappingCommand,
-  menuCommand,
-  adminCommand
-];
+import { mappingCommand } from './mapping.command';
+import { menuCommand } from './menu.command';
+import { adminCommand } from './admin.command';
+
+export const commandList = [mappingCommand, menuCommand, adminCommand];

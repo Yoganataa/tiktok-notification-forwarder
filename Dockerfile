@@ -1,21 +1,19 @@
 # Dockerfile
+# Multi-stage build for optimized production image
+
 # ---------- Stage 1: Builder ----------
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install build dependencies
 COPY package.json package-lock.json ./
-COPY prisma ./prisma/
+RUN npm ci && \
+    npm cache clean --force
 
-RUN npm ci
-
-# Prisma Client WAJIB digenerate sebelum tsc
-RUN npx prisma generate
-
+# Copy source and build
 COPY . .
-
 RUN npm run build
-
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine
@@ -23,19 +21,21 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN apk add --no-cache openssl
+# Install runtime dependencies
+RUN apk add --no-cache openssl dumb-init
 
-# Non-root user
-RUN addgroup -g 10001 appgroup \
- && adduser -D -u 10001 -G appgroup appuser
+# Create non-root user
+RUN addgroup -g 10001 appgroup && \
+    adduser -D -u 10001 -G appgroup appuser
 
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
+# Copy built application
+COPY --from=builder --chown=appuser:appgroup /app/package.json ./
+COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
 
-RUN chown -R appuser:appgroup /app
-
+# Switch to non-root user
 USER appuser
 
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/index.js"]

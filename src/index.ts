@@ -1,320 +1,275 @@
 // src/index.ts
-import { 
-  Client, 
-  GatewayIntentBits, 
-  Events,
-  REST,
-  Routes,
-  ActivityType
-} from 'discord.js';
-import { prisma } from './lib/prisma';
-import { config} from './config';
+import { Client, GatewayIntentBits, Events, REST, Routes, ActivityType } from 'discord.js';
+import { database } from './core/database/connection';
+import { configManager } from './core/config/config';
 import { logger } from './utils/logger';
-import { forwarder } from './services/forwarder';
 import { commandList } from './commands';
-import {handleMappingCommand } from './commands/mapping';
-import { handleMenuCommand } from './commands/menu';
-import { handleAdminCommand } from './commands/admin';
+import { handleMappingCommand } from './commands/mapping.command';
+import { handleMenuCommand } from './commands/menu.command';
+import { handleAdminCommand } from './commands/admin.command';
 
-/**
- * Discord client with required intents
- */
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ],
-  presence: {
-    activities: [{
-      name: 'TikTok notifications',
-      type: ActivityType.Watching
-    }],
-    status: 'online'
+// Service initialization
+import { UserMappingRepository } from './repositories/user-mapping.repository';
+import { AccessControlRepository } from './repositories/access-control.repository';
+import { PermissionService } from './services/permission.service';
+import { NotificationService } from './services/notification.service';
+import { ForwarderService } from './services/forwarder.service';
+
+class Application {
+  private client: Client;
+  private config: ReturnType<typeof configManager.get>;
+  private forwarderService: ForwarderService;
+  private permissionService: PermissionService;
+  private isShuttingDown = false;
+
+  constructor() {
+    // Load configuration
+    this.config = configManager.load();
+
+    // Initialize Discord client
+    this.client = new Client({
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+      ],
+      presence: {
+        activities: [
+          {
+            name: 'TikTok notifications',
+            type: ActivityType.Watching,
+          },
+        ],
+        status: 'online',
+      },
+    });
+
+    // Initialize repositories
+    const userMappingRepo = new UserMappingRepository();
+    const accessControlRepo = new AccessControlRepository();
+
+    // Initialize services
+    this.permissionService = new PermissionService(accessControlRepo);
+    const notificationService = new NotificationService(userMappingRepo);
+    this.forwarderService = new ForwarderService(notificationService);
+
+    // Setup event handlers
+    this.setupEventHandlers();
   }
-});
 
-/**
-  * Registers slash commands with Discord API
-  * Handles both global and guild-specific commands
-  * Global commands are registered for all servers
-  * Guild commands are cleared from the core server to avoid conflicts
-  * Logs success and error information
-  * @return Promise that resolves when registration is complete
- */
+  /**
+   * Start the application
+   */
+  async start(): Promise<void> {
+    try {
+      logger.info('Starting TikTok Notification Forwarder Bot', {
+        environment: this.config.app.nodeEnv,
+        version: '2.0.0',
+      });
 
-async function registerCommands(): Promise<void> {
-  try {
-    const rest = new REST({ version: '10' }).setToken(config.discordToken);
-    
-    const commandsBody = commandList.map(cmd => cmd.toJSON());
+      // Connect to database
+      await database.connect({
+        connectionString: this.config.database.url,
+        ssl: this.config.app.nodeEnv === 'production',
+        maxConnections: this.config.database.maxConnections,
+        minConnections: this.config.database.minConnections,
+      });
 
-    logger.info('🔄 Memulai sinkronisasi command...');
+      // Login to Discord
+      await this.client.login(this.config.discord.token);
+    } catch (error) {
+      logger.error('Failed to start application', {
+        error: (error as Error).message,
+      });
+      await this.shutdown(1);
+    }
+  }
 
-    await rest.put(
-      Routes.applicationCommands(config.clientId), 
-      { body: commandsBody }
-    );
-    logger.info(`✅ Global commands (${commandsBody.length}) berhasil didaftarkan.`);
+  /**
+   * Setup Discord event handlers
+   */
+  private setupEventHandlers(): void {
+    this.client.once(Events.ClientReady, async (readyClient) => {
+      logger.info('Bot authenticated', {
+        username: readyClient.user.tag,
+        id: readyClient.user.id,
+      });
 
-    if (config.coreServerId) {
-      await rest.put(
-        Routes.applicationGuildCommands(config.clientId, config.coreServerId),
-        { body: [] } 
+      try {
+        await this.registerCommands();
+        await this.logServerInfo();
+        logger.info('Bot initialization complete');
+      } catch (error) {
+        logger.error('Initialization failed', {
+          error: (error as Error).message,
+        });
+        await this.shutdown(1);
+      }
+    });
+
+    this.client.on(Events.MessageCreate, async (message) => {
+      if (message.author.id === this.client.user?.id) {
+        return;
+      }
+
+      try {
+        await this.forwarderService.processMessage(message);
+      } catch (error) {
+        logger.error('Error processing message', {
+          messageId: message.id,
+          error: (error as Error).message,
+        });
+      }
+    });
+
+    this.client.on(Events.InteractionCreate, async (interaction) => {
+      if (!interaction.isChatInputCommand()) return;
+
+      try {
+        switch (interaction.commandName) {
+          case 'mapping':
+            await handleMappingCommand(interaction, this.permissionService);
+            break;
+          case 'menu':
+            await handleMenuCommand(interaction, this.permissionService);
+            break;
+          case 'admin':
+            await handleAdminCommand(interaction, this.permissionService);
+            break;
+        }
+      } catch (error) {
+        logger.error('Error handling interaction', {
+          commandName: interaction.commandName,
+          error: (error as Error).message,
+        });
+      }
+    });
+
+    this.client.on(Events.Error, (error) => {
+      logger.error('Discord client error', { error: error.message });
+    });
+
+    this.client.on(Events.Warn, (warning) => {
+      logger.warn('Discord client warning', { warning });
+    });
+  }
+
+  /**
+   * Register slash commands
+   */
+  private async registerCommands(): Promise<void> {
+    try {
+      const rest = new REST({ version: '10' }).setToken(
+        this.config.discord.token
       );
-      logger.info('🧹 Guild commands (sisa lama) berhasil dibersihkan dari Core Server.');
+
+      const commandsBody = commandList.map((cmd) => cmd.toJSON());
+
+      logger.info('Registering slash commands', {
+        count: commandsBody.length,
+      });
+
+      await rest.put(Routes.applicationCommands(this.config.discord.clientId), {
+        body: commandsBody,
+      });
+
+      logger.info('Commands registered successfully');
+
+      // Clear guild-specific commands
+      if (this.config.discord.coreServerId) {
+        await rest.put(
+          Routes.applicationGuildCommands(
+            this.config.discord.clientId,
+            this.config.discord.coreServerId
+          ),
+          { body: [] }
+        );
+        logger.info('Guild commands cleared from core server');
+      }
+    } catch (error) {
+      logger.error('Failed to register commands', {
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  /**
+   * Log server information
+   */
+  private async logServerInfo(): Promise<void> {
+    try {
+      const guilds = await this.client.guilds.fetch();
+      logger.info('Connected to servers', { count: guilds.size });
+
+      for (const [id, guild] of guilds) {
+        const fullGuild = await guild.fetch();
+        logger.info('Server details', {
+          id: fullGuild.id,
+          name: fullGuild.name,
+          memberCount: fullGuild.memberCount,
+          isCoreServer: id === this.config.discord.coreServerId,
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to fetch server information', {
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  /**
+   * Graceful shutdown
+   */
+  async shutdown(exitCode = 0): Promise<void> {
+    if (this.isShuttingDown) {
+      return;
     }
 
-  } catch (error) {
-    logger.error('Gagal meregistrasi command', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    this.isShuttingDown = true;
+    logger.info('Initiating graceful shutdown', { exitCode });
+
+    try {
+      // Disconnect database
+      await database.disconnect();
+
+      // Destroy Discord client
+      this.client.destroy();
+
+      logger.info('Shutdown complete');
+      process.exit(exitCode);
+    } catch (error) {
+      logger.error('Error during shutdown', {
+        error: (error as Error).message,
+      });
+      process.exit(1);
+    }
   }
 }
 
-/**
- * Logs information about all servers the bot is in
- */
-async function logServerInfo(): Promise<void> {
-  try {
-    const coreServer = await client.guilds.fetch(config.coreServerId).catch(() => null);
-    
-    if (coreServer) {
-      logger.info('Core server found', {
-        id: coreServer.id,
-        name: coreServer.name,
-        memberCount: coreServer.memberCount
-      });
-    } else {
-      logger.warn('Core server not found', {
-        coreServerId: config.coreServerId,
-        message: 'Bot may not be in the core server yet'
-      });
-    }
+// Create application instance
+const app = new Application();
 
-    const guilds = await client.guilds.fetch();
-    logger.info('Active servers', {
-      totalServers: guilds.size
-    });
-
-    for (const [id, guild] of guilds) {
-      const fullGuild = await guild.fetch();
-      const isCoreServer = id === config.coreServerId;
-      
-      logger.info('Server details', {
-        id: fullGuild.id,
-        name: fullGuild.name,
-        memberCount: fullGuild.memberCount,
-        isCoreServer
-      });
-    }
-  } catch (error) {
-    logger.error('Failed to fetch server information', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-}
-
-/**
- * Initializes database connection
- */
-async function initializeDatabase(): Promise<void> {
-  try {
-    await prisma.$connect();
-    
-    // Test connection with a simple query
-    await prisma.$queryRaw`SELECT 1`;
-    
-    logger.info('Database connected successfully');
-  } catch (error) {
-    logger.error('Database connection failed', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      databaseUrl: config.databaseUrl
-    });
-    throw error;
-  }
-}
-
-/**
- * Client ready event - triggers once when bot is authenticated
- */
-client.once(Events.ClientReady, async (readyClient) => {
-  logger.info('Bot authenticated', {
-    username: readyClient.user.tag,
-    id: readyClient.user.id,
-    environment: config.nodeEnv
-  });
-
-  logger.info('Configuration loaded', {
-    sourceBotId: config.sourceBotIds.join(', '),
-    coreServerId: config.coreServerId,
-    fallbackChannelId: config.fallbackChannelId,
-    logLevel: config.logLevel
-  });
-
-  try {
-    await initializeDatabase();
-    await registerCommands();
-    await logServerInfo();
-    
-    logger.info('Bot initialization complete');
-  } catch (error) {
-    logger.error('Initialization failed', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    process.exit(1);
-  }
-});
-
-/**
- * Message creation event - processes all new messages
- */
-client.on(Events.MessageCreate, async (message) => {
-  // Ignore messages from self
-  if (message.author.id === client.user?.id) {
-    return;
-  }
-
-  try {
-    await forwarder.processMessage(message);
-  } catch (error) {
-    logger.error('Error processing message', {
-      messageId: message.id,
-      channelId: message.channel.id,
-      guildId: message.guildId,
-      authorId: message.author.id,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
-  }
-});
-
-/**
- * Interaction creation event - handles slash commands
- */
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-
-  try {
-    if (interaction.commandName === 'mapping') {
-      await handleMappingCommand(interaction);
-    }
-    else if (interaction.commandName === 'menu') {
-      await handleMenuCommand(interaction);
-    }
-    else if (interaction.commandName === 'admin') {
-      await handleAdminCommand(interaction);
-    }
-  } catch (error) {
-    logger.error('Error handling interaction', {
-      commandName: interaction.commandName,
-      userId: interaction.user.id,
-      guildId: interaction.guildId,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
-  }
-});
-
-/**
- * Discord client error event
- */
-client.on(Events.Error, (error) => {
-  logger.error('Discord client error', {
-    error: error.message,
-    stack: error.stack,
-    name: error.name
-  });
-});
-
-/**
- * Discord client warning event
- */
-client.on(Events.Warn, (warning) => {
-  logger.warn('Discord client warning', {
-    warning
-  });
-});
-
-/**
- * Handles unhandled promise rejections
- */
-process.on('unhandledRejection', (reason, promise) => {
+// Handle process events
+process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled promise rejection', {
     reason: reason instanceof Error ? reason.message : String(reason),
-    stack: reason instanceof Error ? reason.stack : undefined,
-    promise: String(promise)
   });
 });
 
-/**
- * Handles uncaught exceptions
- */
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception', {
-    error: error.message,
-    stack: error.stack,
-    name: error.name
-  });
-  
-  // Exit process on uncaught exception
-  shutdown(1);
+  logger.error('Uncaught exception', { error: error.message });
+  app.shutdown(1);
 });
 
-/**
- * Gracefully shuts down the application
- * 
- * @param exitCode - Exit code (0 for success, 1 for error)
- */
-async function shutdown(exitCode = 0): Promise<void> {
-  logger.info('Initiating graceful shutdown', {
-    exitCode,
-    reason: exitCode === 0 ? 'Normal termination' : 'Error termination'
-  });
-  
-  try {
-    // Disconnect from database
-    await prisma.$disconnect();
-    logger.info('Database disconnected');
-
-    // Destroy Discord client
-    client.destroy();
-    logger.info('Discord client destroyed');
-
-    logger.info('Shutdown complete');
-    process.exit(exitCode);
-  } catch (error) {
-    logger.error('Error during shutdown', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    process.exit(1);
-  }
-}
-
-/**
- * Handle graceful shutdown signals
- */
 process.on('SIGINT', () => {
   logger.info('Received SIGINT signal');
-  shutdown(0);
+  app.shutdown(0);
 });
 
 process.on('SIGTERM', () => {
   logger.info('Received SIGTERM signal');
-  shutdown(0);
+  app.shutdown(0);
 });
 
-/**
- * Start the bot
- */
-(async () => {
-  try {
-    logger.info('Starting TikTok Notification Forwarder Bot');
-    await client.login(config.discordToken);
-  } catch (error) {
-    logger.error('Failed to login', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    process.exit(1);
-  }
-})();
+// Start application
+app.start();

@@ -6,3 +6,35 @@ services:
     image: tiktok-forwarder:latest
     container_name: tiktok-forwarder
     restart: unless-stopped
+    # Environment variables akan diisi via Portainer atau file .env
+    # env_file: 
+    #   - .env 
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+    # Menambahkan environment variable langsung untuk Portainer (Opsional, tapi disarankan jika tidak mount file .env)
+    environment:
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: tiktok-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-tiktok_bot}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Pastikan file ini ada di repository git Anda di path yang tepat
+      - ./src/core/database/migrations/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
