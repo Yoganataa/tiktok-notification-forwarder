@@ -22,8 +22,6 @@ services:
     image: tiktok-forwarder:latest
     container_name: tiktok-forwarder
     restart: unless-stopped
-    env_file:
-      - .env
     depends_on:
       postgres:
         condition: service_healthy
