@@ -8,8 +8,7 @@ WORKDIR /app
 
 # Install build dependencies
 COPY package.json package-lock.json ./
-RUN npm ci && \
-    npm cache clean --force
+RUN npm install --omit=dev
 
 # Copy source and build
 COPY . .
