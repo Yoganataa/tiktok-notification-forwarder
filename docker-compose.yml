@@ -19,7 +19,6 @@ services:
 
   bot:
     build: .
-    image: tiktok-forwarder:latest
     container_name: tiktok-forwarder
     restart: unless-stopped
     depends_on:
