@@ -19,8 +19,10 @@
   "author": "yoganataa",
   "license": "MIT",
   "dependencies": {
+    "@tobyg74/tiktok-api-dl": "github:TobyG74/tiktok-api-dl",
     "discord.js": "^14.25.1",
     "dotenv": "^17.2.3",
+    "node-cache": "^5.1.2",
     "pg": "^8.16.3",
     "winston": "^3.19.0"
   },

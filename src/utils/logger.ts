@@ -2,7 +2,14 @@
 import winston from 'winston';
 import { configManager } from '../core/config/config';
 import { LOG_CONFIG } from '../constants';
+import dotenv from 'dotenv';
+dotenv.config();
 
+/**
+ * Custom log format for development environments.
+ * * Features colorized output and human-readable timestamps.
+ * * serializes metadata objects for easier debugging in the console.
+ */
 const developmentFormat = winston.format.combine(
   winston.format.colorize(),
   winston.format.timestamp({ format: LOG_CONFIG.DATE_FORMAT }),
@@ -13,6 +20,11 @@ const developmentFormat = winston.format.combine(
   })
 );
 
+/**
+ * Standardized log format for production environments.
+ * * Uses structured JSON formatting for easy ingestion by log aggregation tools (e.g., ELK Stack).
+ * * Includes full stack traces for error-level logs.
+ */
 const productionFormat = winston.format.combine(
   winston.format.timestamp({ format: LOG_CONFIG.DATE_FORMAT }),
   winston.format.errors({ stack: true }),
@@ -20,15 +32,23 @@ const productionFormat = winston.format.combine(
 );
 
 /**
- * Create logger instance
+ * Factory function to instantiate the Winston logger.
+ * * Implements a fail-safe mechanism to ensure logging is available even before 
+ * the centralized ConfigManager is fully initialized.
+ * * Configures distinct transport layers for Console (Human-readable) and File (Structured JSON).
  */
 function createLogger() {
   let config;
   try {
     config = configManager.get();
   } catch {
-    // Config not loaded yet, use defaults
-    config = { app: { nodeEnv: 'development', logLevel: 'info' } };
+    // Fallback configuration for boot-time logging before ConfigManager is ready
+    config = { 
+      app: { 
+        nodeEnv: process.env.NODE_ENV || 'development', 
+        logLevel: process.env.LOG_LEVEL || 'info' 
+      } 
+    };
   }
 
   const logFormat =
@@ -66,4 +86,7 @@ function createLogger() {
   });
 }
 
+/**
+ * Global singleton logger instance.
+ */
 export const logger = createLogger();

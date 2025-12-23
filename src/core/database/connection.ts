@@ -3,6 +3,10 @@ import { Pool, PoolClient, PoolConfig, QueryResult, QueryResultRow } from 'pg';
 import { DatabaseError } from '../errors/database.error';
 import { logger } from '../../utils/logger';
 
+/**
+ * Configuration interface for the Database connection.
+ * * Defines the parameters required to establish a connection pool.
+ */
 export interface DatabaseConfig {
   connectionString: string;
   ssl?: boolean;
@@ -12,12 +16,22 @@ export interface DatabaseConfig {
   connectionTimeoutMs?: number;
 }
 
+/**
+ * Singleton Database Wrapper Class.
+ * * Manages the PostgreSQL connection pool using `pg`.
+ * * Provides methods for executing queries, transaction management, and graceful shutdown.
+ */
 class Database {
   private pool: Pool | null = null;
   private isShuttingDown = false;
 
   /**
-   * Initialize database connection pool
+   * Initializes the database connection pool.
+   * * Configures the pool with provided settings (SSL, timeouts, limits).
+   * * Sets up event listeners for pool errors and connection events.
+   * * Performs an immediate connectivity test ('SELECT 1') to validate the configuration.
+   * * @param config - The database configuration object.
+   * * @throws {DatabaseError} If the initial connection test fails.
    */
   async connect(config: DatabaseConfig): Promise<void> {
     if (this.pool) {
@@ -44,7 +58,6 @@ class Database {
       logger.debug('New database client connected');
     });
 
-    // Test connection
     try {
       const client = await this.pool.connect();
       await client.query('SELECT 1');
@@ -59,7 +72,13 @@ class Database {
   }
 
   /**
-   * Execute a parameterized query
+   * Executes a parameterized SQL query against the pool.
+   * * Wraps the native query execution with performance logging and error handling.
+   * * Automatically masks query parameters in logs for security.
+   * * @template T - The expected shape of the resulting rows.
+   * * @param text - The SQL query string.
+   * * @param params - Optional array of values to substitute into the query.
+   * * @returns The result of the query including rows and row count.
    */
   async query<T extends QueryResultRow = any>(
     text: string,
@@ -86,14 +105,17 @@ class Database {
       logger.error('Database query error', {
         error: err.message,
         query: text,
-        params: params?.map(() => '?'), // Don't log actual params (security)
+        params: params?.map(() => '?'),
       });
       throw new DatabaseError(`Query failed: ${err.message}`, err);
     }
   }
 
   /**
-   * Get a client for transaction management
+   * Acquires a raw client from the pool.
+   * * Useful for operations requiring a dedicated client, such as transactions (BEGIN/COMMIT).
+   * * **Important:** The caller is responsible for releasing the client back to the pool.
+   * * @returns A promise that resolves to a `PoolClient`.
    */
   async getClient(): Promise<PoolClient> {
     if (!this.pool) {
@@ -111,7 +133,9 @@ class Database {
   }
 
   /**
-   * Gracefully close all connections
+   * Gracefully shuts down the database connection pool.
+   * * Waits for active clients to finish before closing (handled by `pool.end()`).
+   * * Prevents new connections during the shutdown phase.
    */
   async disconnect(): Promise<void> {
     if (this.isShuttingDown) {
@@ -138,7 +162,9 @@ class Database {
   }
 
   /**
-   * Get pool statistics
+   * Retrieves current statistics about the connection pool.
+   * * Useful for monitoring health and load.
+   * * @returns An object containing total, idle, and waiting client counts.
    */
   getPoolStats() {
     if (!this.pool) {

@@ -3,7 +3,11 @@ import { EmbedBuilder, ColorResolvable } from 'discord.js';
 import { EMBED_COLORS } from '../constants';
 
 /**
- * Create standardized success embed
+ * Generates a standardized 'Success' style Embed.
+ * * Pre-configured with the success color theme and a checkmark emoji.
+ * * @param title - The title of the embed (automatically prefixed with ✅).
+ * * @param description - Optional body text for the embed.
+ * * @returns A constructed `EmbedBuilder` instance.
  */
 export function createSuccessEmbed(
   title: string,
@@ -22,7 +26,11 @@ export function createSuccessEmbed(
 }
 
 /**
- * Create standardized error embed
+ * Generates a standardized 'Error' style Embed.
+ * * Pre-configured with the error color theme and a cross mark emoji.
+ * * @param title - The title of the embed (automatically prefixed with ❌).
+ * * @param description - Optional body text for the embed.
+ * * @returns A constructed `EmbedBuilder` instance.
  */
 export function createErrorEmbed(
   title: string,
@@ -41,7 +49,11 @@ export function createErrorEmbed(
 }
 
 /**
- * Create standardized info embed
+ * Generates a standardized 'Info' style Embed.
+ * * Pre-configured with the info color theme and an information source emoji.
+ * * @param title - The title of the embed (automatically prefixed with ℹ️).
+ * * @param description - Optional body text for the embed.
+ * * @returns A constructed `EmbedBuilder` instance.
  */
 export function createInfoEmbed(
   title: string,
@@ -60,7 +72,12 @@ export function createInfoEmbed(
 }
 
 /**
- * Chunk text to fit Discord field limits
+ * Splits a long string into an array of smaller strings to fit within Discord's character limits.
+ * * Tries to split by newlines first to preserve formatting.
+ * * If a single line exceeds the limit, it performs a hard split on that specific line.
+ * * @param text - The raw text to be split.
+ * * @param maxLength - The maximum character length per chunk (e.g., 1024 for Embed Fields).
+ * * @returns An array of string chunks.
  */
 export function chunkText(text: string, maxLength: number): string[] {
   const chunks: string[] = [];
@@ -69,12 +86,13 @@ export function chunkText(text: string, maxLength: number): string[] {
 
   for (const line of lines) {
     if ((currentChunk + line + '\n').length > maxLength) {
+      // Push the current accumulator if it exists
       if (currentChunk) {
         chunks.push(currentChunk.trim());
         currentChunk = '';
       }
 
-      // If single line exceeds limit, split it
+      // Handle edge case: Single line exceeds the maximum length
       if (line.length > maxLength) {
         for (let i = 0; i < line.length; i += maxLength) {
           chunks.push(line.slice(i, i + maxLength));

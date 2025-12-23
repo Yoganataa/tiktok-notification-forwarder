@@ -7,21 +7,29 @@ import { withRetry } from '../utils/retry';
 import { REACTION_EMOJIS } from '../constants';
 import { NotificationData } from '../core/types';
 
+/**
+ * Service responsible for orchestrating the notification forwarding flow.
+ * * Intercepts incoming Discord messages, filters them, and routes valid
+ * TikTok notifications to the appropriate destination channels within the Core Server.
+ */
 export class ForwarderService {
   constructor(private notificationService: NotificationService) {}
 
   /**
-   * Process incoming Discord message
+   * Main entry point for processing incoming Discord messages.
+   * * Filters messages to ensure they originate from authorized source bots.
+   * * Parses content to extract TikTok notification data.
+   * * Determines the routing strategy based on the message's origin (Core vs. External Server).
+   * * @param message - The raw Discord message object to process.
    */
   async processMessage(message: Message): Promise<void> {
     const config = configManager.get();
 
-    // Ignore if not from source bot
+    // Guard Clause: Only process messages from configured source bots
     if (!config.bot.sourceBotIds.includes(message.author.id)) {
       return;
     }
 
-    // Extract notification
     const notification = this.notificationService.extractNotification(message);
     if (!notification) {
       return;
@@ -52,7 +60,11 @@ export class ForwarderService {
   }
 
   /**
-   * Forward notification within core server
+   * Handles forwarding logic for notifications originating from within the Core Server.
+   * * Uses standard formatting without cross-server attribution.
+   * * Reacts with the Core Server emoji on success.
+   * * @param notification - The extracted notification data.
+   * * @param message - The original source message.
    */
   private async forwardInCoreServer(
     notification: NotificationData,
@@ -87,7 +99,11 @@ export class ForwarderService {
   }
 
   /**
-   * Forward notification to core server from external server
+   * Handles forwarding logic for notifications originating from external/subscriber servers.
+   * * Adds source server attribution to the forwarded message.
+   * * Reacts with the External Server emoji on success.
+   * * @param notification - The extracted notification data.
+   * * @param message - The original source message.
    */
   private async forwardToCoreServer(
     notification: NotificationData,
@@ -134,6 +150,12 @@ export class ForwarderService {
     });
   }
 
+  /**
+   * Helper method to fetch the Core Guild object with retry logic.
+   * * Ensures connectivity to the main server before attempting to forward.
+   * * @param client - The Discord client instance.
+   * * @returns The Guild object if found, otherwise null.
+   */
   private async fetchCoreServer(client: Client) {
     const config = configManager.get();
     try {

@@ -14,9 +14,13 @@ import { EMBED_COLORS, DISCORD_LIMITS } from '../constants';
 import { ValidationError } from '../core/errors/validation.error';
 import { RecordNotFoundError } from '../core/errors/database.error';
 
-// Initialize repository
 const userMappingRepo = new UserMappingRepository();
 
+/**
+ * Slash Command Definition for Mapping Management.
+ * * Defines the structure for the `/mapping` command, allowing authorized users
+ * to add, remove, list, and view details of TikTok-to-Discord mappings.
+ */
 export const mappingCommand = new SlashCommandBuilder()
   .setName('mapping')
   .setDescription('Manage TikTok user to channel mappings')
@@ -66,6 +70,13 @@ export const mappingCommand = new SlashCommandBuilder()
       )
   );
 
+/**
+ * Main handler for the `/mapping` slash command.
+ * * Routes execution to specific subcommand handlers based on the user's input.
+ * * Enforces permission levels: 'Sudo' for general use, 'Admin' for deletion.
+ * * @param interaction - The interaction object triggered by the command.
+ * @param permissionService - Service to validate user permissions.
+ */
 export async function handleMappingCommand(
   interaction: ChatInputCommandInteraction,
   permissionService: PermissionService
@@ -73,7 +84,6 @@ export async function handleMappingCommand(
   const subcommand = interaction.options.getSubcommand();
 
   try {
-    // Permission check
     const isSudo = await permissionService.isSudoOrHigher(interaction.user.id);
     if (!isSudo) {
       await interaction.reply({
@@ -83,7 +93,6 @@ export async function handleMappingCommand(
       return;
     }
 
-    // Additional check for remove
     if (subcommand === 'remove') {
       const isAdmin = await permissionService.isAdminOrHigher(
         interaction.user.id
@@ -129,6 +138,11 @@ export async function handleMappingCommand(
   }
 }
 
+/**
+ * Handles the 'add' subcommand.
+ * * Creates a new mapping or updates an existing one for a TikTok username.
+ * * Ensures the selected channel is a text-based channel.
+ */
 async function handleAdd(
   interaction: ChatInputCommandInteraction
 ): Promise<void> {
@@ -176,6 +190,10 @@ async function handleAdd(
   });
 }
 
+/**
+ * Handles the 'remove' subcommand.
+ * * Deletes a mapping from the database based on the username.
+ */
 async function handleRemove(
   interaction: ChatInputCommandInteraction
 ): Promise<void> {
@@ -207,6 +225,11 @@ async function handleRemove(
   });
 }
 
+/**
+ * Handles the 'list' subcommand.
+ * * Retrieves all active mappings and displays them in a paginated/chunked embed
+ * to strictly adhere to Discord's message limits.
+ */
 async function handleList(
   interaction: ChatInputCommandInteraction
 ): Promise<void> {
@@ -230,7 +253,6 @@ async function handleList(
     .setTimestamp()
     .setFooter({ text: `Requested by ${interaction.user.tag}` });
 
-  // Chunk mappings to avoid exceeding Discord limits
   const chunks = chunkMappings(mappings);
   chunks.forEach((chunk, index) => {
     embed.addFields({
@@ -248,6 +270,12 @@ async function handleList(
   });
 }
 
+/**
+ * Handles the 'info' subcommand.
+ * * Retrieves detailed metadata for a specific user mapping, including creation
+ * and last update timestamps.
+ * * @throws RecordNotFoundError if the username is not found.
+ */
 async function handleInfo(
   interaction: ChatInputCommandInteraction
 ): Promise<void> {
@@ -285,6 +313,11 @@ async function handleInfo(
   await interaction.editReply({ embeds: [embed] });
 }
 
+/**
+ * Splits the mapping list into smaller chunks to fit within Discord embed field limits.
+ * * @param mappings - Array of mapping objects.
+ * * @returns An array of string chunks safe for Discord embeds.
+ */
 function chunkMappings(mappings: any[]): string[] {
   const chunks: string[] = [];
   let currentChunk = '';
@@ -309,10 +342,21 @@ function chunkMappings(mappings: any[]): string[] {
   return chunks;
 }
 
+/**
+ * Normalizes a TikTok username by lowercasing and removing the '@' prefix.
+ * * @param username - The raw input username.
+ * * @returns The sanitized username string.
+ */
 function sanitizeUsername(username: string): string {
   return username.toLowerCase().replace(/^@/, '').trim();
 }
 
+/**
+ * Safely edits a reply or sends a new ephemeral message if the interaction
+ * has not been deferred yet.
+ * * @param interaction - The current interaction context.
+ * * @param content - The message content to send.
+ */
 async function safeEditReply(
   interaction: ChatInputCommandInteraction,
   content: string

@@ -1,7 +1,7 @@
 # Dockerfile
 # Multi-stage build for optimized production image
 
-# ---------- Stage 1: Builder ----------
+# Stage 1: Builder
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -15,7 +15,7 @@ RUN npm ci && \
 COPY . .
 RUN npm run build
 
-# ---------- Stage 2: Runner ----------
+# Stage 2: Runner
 FROM node:20-alpine
 
 WORKDIR /app
@@ -32,6 +32,11 @@ RUN addgroup -g 10001 appgroup && \
 COPY --from=builder --chown=appuser:appgroup /app/package.json ./
 COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
 COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+COPY --from=builder --chown=appuser:appgroup /app/src/core/database/migrations ./dist/core/database/migrations
+
+# Buat folder logs secara eksplisit dan berikan izin ke appuser
+RUN mkdir -p logs && \
+    chown -R appuser:appgroup logs
 
 # Switch to non-root user
 USER appuser

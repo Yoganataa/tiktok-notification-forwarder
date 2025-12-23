@@ -7,6 +7,12 @@ import {
 import { PermissionService } from '../services/permission.service';
 import { ROLES } from '../core/types/database.types';
 
+/**
+ * Slash Command Definition for Admin Management.
+ * * Defines the structure for the `/admin` command, which allows privileged users
+ * to manage roles and revoke access within the system.
+ * * Default Permission: Administrator.
+ */
 export const adminCommand = new SlashCommandBuilder()
   .setName('admin')
   .setDescription('Manage user roles (Owner only)')
@@ -38,10 +44,18 @@ export const adminCommand = new SlashCommandBuilder()
       )
   );
 
+/**
+ * Handles the execution of the `/admin` slash command.
+ * * Validates the caller's permissions and routes the request to the appropriate
+ * subcommand handler (setrole or revoke).
+ * * @param interaction - The interaction object triggered by the command.
+ * @param permissionService - The service responsible for handling role assignments and access control.
+ */
 export async function handleAdminCommand(
   interaction: ChatInputCommandInteraction,
   permissionService: PermissionService
 ): Promise<void> {
+  // Guard clause: Ensure the user has adequate permissions within the bot's system
   if (!(await permissionService.isAdminOrHigher(interaction.user.id))) {
     await interaction.reply({
       content: '⛔ Only Admins can use this.',

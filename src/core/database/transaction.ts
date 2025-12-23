@@ -4,10 +4,20 @@ import { database } from './connection';
 import { DatabaseError } from '../errors/database.error';
 import { logger } from '../../utils/logger';
 
+/**
+ * Manages the lifecycle of a database transaction.
+ * * Handles acquiring a dedicated client from the pool, executing the transaction
+ * commands (BEGIN, COMMIT, ROLLBACK), and releasing the client back to the pool.
+ */
 export class Transaction {
   private client: PoolClient | null = null;
   private isActive = false;
 
+  /**
+   * Starts a new database transaction.
+   * * Acquires a dedicated client from the database pool and executes the 'BEGIN' command.
+   * * @throws {DatabaseError} If a transaction is already active on this instance.
+   */
   async begin(): Promise<void> {
     if (this.isActive) {
       throw new DatabaseError('Transaction already active');
@@ -19,6 +29,11 @@ export class Transaction {
     logger.debug('Transaction started');
   }
 
+  /**
+   * Commits the current transaction.
+   * * Persists all changes made during the transaction and releases the client.
+   * * @throws {DatabaseError} If no transaction is currently active.
+   */
   async commit(): Promise<void> {
     if (!this.isActive || !this.client) {
       throw new DatabaseError('No active transaction');
@@ -34,6 +49,11 @@ export class Transaction {
     }
   }
 
+  /**
+   * Rolls back the current transaction.
+   * * Reverts all pending changes and releases the client.
+   * * Safe to call even if the transaction state is inconsistent.
+   */
   async rollback(): Promise<void> {
     if (!this.isActive || !this.client) {
       return;
@@ -49,6 +69,12 @@ export class Transaction {
     }
   }
 
+  /**
+   * Retrieves the active database client for this transaction.
+   * * Used to execute queries within the context of the transaction.
+   * * @returns The active `PoolClient`.
+   * * @throws {DatabaseError} If the transaction is not active.
+   */
   getClient(): PoolClient {
     if (!this.client || !this.isActive) {
       throw new DatabaseError('No active transaction');
@@ -58,7 +84,12 @@ export class Transaction {
 }
 
 /**
- * Execute function within a transaction
+ * Higher-order function to execute a block of code within a transaction scope.
+ * * Automatically handles `begin`, `commit`, and `rollback` logic.
+ * * If the provided function throws an error, the transaction is automatically rolled back.
+ * * @template T - The return type of the callback function.
+ * @param fn - An async function that receives the transactional client.
+ * @returns The result of the callback function `fn`.
  */
 export async function withTransaction<T>(
   fn: (client: PoolClient) => Promise<T>

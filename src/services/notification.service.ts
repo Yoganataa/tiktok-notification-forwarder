@@ -12,32 +12,41 @@ import {
   ForwardConfig,
 } from '../core/types';
 
+/**
+ * Service responsible for parsing incoming Discord messages, constructing notification payloads,
+ * and managing message delivery to target channels.
+ * * Handles extraction of TikTok data from various message formats (Embeds, Buttons, Text).
+ * * Manages visual formatting (Embeds) based on content type (Live/Video/Photo).
+ */
 export class NotificationService {
   constructor(private userMappingRepo: UserMappingRepository) {}
 
   /**
-   * Extract notification data from Discord message
+   * Parses a Discord message to extract TikTok notification details.
+   * * Implements a cascading extraction strategy:
+   * * 1. Checks Message Embeds.
+   * * 2. Checks Message Components (Buttons).
+   * * 3. Checks Raw Text Content.
+   * * @param message - The Discord message to parse.
+   * * @returns Valid `NotificationData` if found, otherwise `null`.
    */
   extractNotification(message: Message): NotificationData | null {
     let username: string | null = null;
     let url: string | undefined;
     let type: ContentType = 'unknown';
 
-    // Check embeds first
     if (message.embeds.length > 0) {
       const embedResult = this.extractFromEmbeds(message);
       if (embedResult.username) username = embedResult.username;
       if (embedResult.url) url = embedResult.url;
     }
 
-    // Check components (buttons)
     if (!username && message.components.length > 0) {
       const componentResult = this.extractFromComponents(message);
       if (componentResult.username) username = componentResult.username;
       if (componentResult.url) url = componentResult.url;
     }
 
-    // Check message content
     if (!username) {
       username = this.extractFromText(message.content);
     }
@@ -46,7 +55,6 @@ export class NotificationService {
       return null;
     }
 
-    // Determine content type
     type = this.determineContentType(url, message.content);
 
     return {
@@ -57,7 +65,12 @@ export class NotificationService {
   }
 
   /**
-   * Get forward configuration for username
+   * Determines the destination channel and formatting rules for a notification.
+   * * Queries the repository for a specific user mapping; falls back to the default
+   * configuration if no mapping exists.
+   * * @param username - The TikTok username to route.
+   * * @param isCrossServer - Whether the source is from an external guild.
+   * * @param sourceServerName - Name of the source guild (if applicable).
    */
   async getForwardConfig(
     username: TikTokUsername,
@@ -75,7 +88,11 @@ export class NotificationService {
   }
 
   /**
-   * Create notification embed
+   * Constructs a rich Discord Embed object tailored to the content type.
+   * * Applies specific color coding and footer attribution based on the source server
+   * and content status (Live, Video, etc.).
+   * * @param notification - The data extracted from the source.
+   * * @param forwardConfig - Configuration determining visual context.
    */
   createEmbed(
     notification: NotificationData,
@@ -124,7 +141,13 @@ export class NotificationService {
   }
 
   /**
-   * Send notification to channel
+   * Dispatches the notification to a specific text channel.
+   * * Validates that the channel exists and is text-based before sending.
+   * * Uses retry logic to handle transient network failures.
+   * * @param client - The Discord Client instance.
+   * * @param channelId - The target channel Snowflake ID.
+   * * @param embed - The constructed embed to send.
+   * * @param url - Optional URL to include as message content (for previews).
    */
   async sendToChannel(
     client: Client,
@@ -147,7 +170,10 @@ export class NotificationService {
   }
 
   /**
-   * Add reaction to message
+   * Adds a reaction emoji to the source message to indicate successful processing.
+   * * Acts as a visual acknowledgement (ACK).
+   * * @param message - The source message.
+   * * @param emoji - The emoji character to react with.
    */
   async addReaction(message: Message, emoji: string): Promise<void> {
     try {
@@ -161,8 +187,11 @@ export class NotificationService {
     }
   }
 
-  // Private helper methods
+  // ================= PRIVATE HELPER METHODS =================
 
+  /**
+   * Extracts a TikTok username from raw text using regex patterns.
+   */
   private extractFromText(text: string): string | null {
     for (const pattern of LIVE_PATTERNS) {
       const match = text.match(pattern);
@@ -173,6 +202,9 @@ export class NotificationService {
     return null;
   }
 
+  /**
+   * Iterates through message embeds to find TikTok URLs or username patterns.
+   */
   private extractFromEmbeds(message: Message): {
     username: string | null;
     url?: string;
@@ -208,6 +240,9 @@ export class NotificationService {
     return { username, url };
   }
 
+  /**
+   * Iterates through message components (buttons) to find TikTok URLs.
+   */
   private extractFromComponents(message: Message): {
     username: string | null;
     url?: string;
@@ -233,6 +268,9 @@ export class NotificationService {
     return { username: null };
   }
 
+  /**
+   * Analyzes the URL structure or message content to classify the notification type.
+   */
   private determineContentType(
     url: string | undefined,
     content: string
@@ -249,6 +287,9 @@ export class NotificationService {
     return 'unknown';
   }
 
+  /**
+   * Returns visual style definitions (colors, text) based on content type.
+   */
   private getEmbedStyle(type: ContentType): {
     statusText: string;
     actionText: string;
@@ -282,6 +323,10 @@ export class NotificationService {
     }
   }
 
+  /**
+   * Safely fetches a channel by ID and validates that it is a text-based channel
+   * capable of receiving messages.
+   */
   private async fetchChannel(
     client: Client,
     channelId: string
@@ -289,7 +334,6 @@ export class NotificationService {
     try {
       const channel = await withRetry(() => client.channels.fetch(channelId));
 
-      // UPDATED: Check if channel exists and is text-based before casting
       if (channel && channel.isTextBased()) {
         return channel as TextChannel;
       }

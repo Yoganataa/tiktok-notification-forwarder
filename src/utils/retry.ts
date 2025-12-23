@@ -1,10 +1,17 @@
 // src/utils/retry.ts
 import { logger } from './logger';
 
+/**
+ * Configuration options for the retry mechanism.
+ */
 export interface RetryOptions {
+  /** Maximum number of attempts before throwing the error. Default: 3. */
   maxAttempts?: number;
+  /** Base delay in milliseconds between attempts. Default: 1000ms. */
   delayMs?: number;
+  /** Whether to use exponential backoff strategy. Default: true. */
   backoff?: boolean;
+  /** Callback function executed on every failed attempt before the next retry. */
   onRetry?: (attempt: number, error: Error) => void;
 }
 
@@ -16,7 +23,14 @@ const DEFAULT_RETRY_OPTIONS: Required<Omit<RetryOptions, 'onRetry'>> =
   });
 
 /**
- * Execute async function with retry logic
+ * Executes an asynchronous function with automatic retry logic.
+ * * Handles transient failures by retrying the operation based on the provided configuration.
+ * * Supports exponential backoff to reduce load on failing services.
+ * * @template T - The return type of the function being executed.
+ * @param fn - The asynchronous function to execute.
+ * @param options - Custom retry configuration (overrides defaults).
+ * @returns The result of the successful execution of `fn`.
+ * @throws The last encountered error if all retry attempts fail.
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
@@ -54,9 +68,14 @@ export async function withRetry<T>(
     }
   }
 
+  // Should technically be unreachable due to the throw inside the loop
   throw lastError!;
 }
 
+/**
+ * Calculates the wait time for the next retry attempt.
+ * * Applies exponential backoff formula: `base * 2^(attempt - 1)` if enabled.
+ */
 function calculateDelay(
   attempt: number,
   baseDelay: number,
@@ -68,10 +87,17 @@ function calculateDelay(
   return baseDelay * Math.pow(2, attempt - 1);
 }
 
+/**
+ * Pauses execution for a specified duration.
+ * @param ms - Duration in milliseconds.
+ */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Categorization of errors that are deemed safe to retry.
+ */
 export enum RetryableErrorType {
   NETWORK = 'NETWORK',
   RATE_LIMIT = 'RATE_LIMIT',
@@ -79,6 +105,10 @@ export enum RetryableErrorType {
   DATABASE = 'DATABASE',
 }
 
+/**
+ * Custom error class to explicitly mark an error as retryable.
+ * * Useful for controlling retry behavior from deep within business logic.
+ */
 export class RetryableError extends Error {
   constructor(
     message: string,
@@ -90,6 +120,12 @@ export class RetryableError extends Error {
   }
 }
 
+/**
+ * Determines if a given error represents a transient failure that warrants a retry.
+ * * Checks against known retryable patterns (Network, Timeout, Rate Limits)
+ * or explicit `RetryableError` instances.
+ * @param error - The error to evaluate.
+ */
 export function isRetryableError(error: Error): boolean {
   if (error instanceof RetryableError) {
     return true;

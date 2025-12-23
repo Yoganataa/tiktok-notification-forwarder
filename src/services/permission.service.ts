@@ -4,21 +4,30 @@ import { UserRole, ROLES } from '../core/types/database.types';
 import { configManager } from '../core/config/config';
 import { ValidationError } from '../core/errors/validation.error';
 
+/**
+ * Service responsible for managing user roles and access control logic.
+ * * Acts as a gatekeeper, verifying user permissions against both hardcoded 
+ * configuration (for the Bot Owner) and dynamic database records (for Staff).
+ */
 export class PermissionService {
   constructor(private accessControlRepo: AccessControlRepository) {}
 
   /**
-   * Get effective user role
+   * Resolves the effective role for a given user ID.
+   * * **Priority Order:**
+   * * 1. Hardcoded Owner ID (from Config).
+   * * 2. Database Record (Admin/Sudo).
+   * * 3. Default 'USER' role.
+   * * @param userId - The Discord user ID to check.
+   * * @returns The highest privilege level associated with the user.
    */
   async getUserRole(userId: string): Promise<UserRole> {
     const config = configManager.get();
 
-    // Check if user is owner
     if (userId === config.discord.ownerId) {
       return ROLES.OWNER;
     }
 
-    // Check database
     const dbRole = await this.accessControlRepo.getUserRole(userId);
     if (dbRole && this.isValidRole(dbRole)) {
       return dbRole;
@@ -28,7 +37,9 @@ export class PermissionService {
   }
 
   /**
-   * Check if user is Admin or higher
+   * Checks if a user holds an Administrator-level role or higher.
+   * * **Authorized Roles:** OWNER, ADMIN.
+   * * @param userId - The Discord user ID to check.
    */
   async isAdminOrHigher(userId: string): Promise<boolean> {
     const role = await this.getUserRole(userId);
@@ -36,7 +47,9 @@ export class PermissionService {
   }
 
   /**
-   * Check if user is Sudo or higher
+   * Checks if a user holds a Sudo-level role or higher.
+   * * **Authorized Roles:** OWNER, ADMIN, SUDO.
+   * * @param userId - The Discord user ID to check.
    */
   async isSudoOrHigher(userId: string): Promise<boolean> {
     const role = await this.getUserRole(userId);
@@ -44,7 +57,12 @@ export class PermissionService {
   }
 
   /**
-   * Assign role to user
+   * Grants a specific role to a user.
+   * * **Validation:** Prevents assignment of the 'OWNER' role, which is strictly configuration-bound.
+   * * @param userId - The target user ID.
+   * * @param role - The role to assign.
+   * * @param assignedBy - The ID of the admin performing the assignment.
+   * * @throws {ValidationError} If attempting to assign an invalid or restricted role.
    */
   async assignRole(
     userId: string,
@@ -63,7 +81,11 @@ export class PermissionService {
   }
 
   /**
-   * Revoke user access
+   * Revokes any privileged access from a user.
+   * * **Validation:** Prevents revocation of the hardcoded Owner's access.
+   * * @param userId - The user ID to remove from access control.
+   * * @returns `true` if access was successfully revoked.
+   * * @throws {ValidationError} If attempting to revoke the Owner's access.
    */
   async revokeAccess(userId: string): Promise<boolean> {
     const config = configManager.get();
@@ -76,12 +98,16 @@ export class PermissionService {
   }
 
   /**
-   * Get all staff members
+   * Retrieves a list of all users with elevated privileges (Staff).
+   * * @returns An array of AccessControl records.
    */
   async getAllStaff() {
     return await this.accessControlRepo.findAll();
   }
 
+  /**
+   * Type guard to validate if a string matches a known `UserRole`.
+   */
   private isValidRole(role: string): role is UserRole {
     return Object.values(ROLES).includes(role as UserRole);
   }
