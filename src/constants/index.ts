@@ -1,4 +1,5 @@
 // src/constants/index.ts
+import packageJson from '../../package.json';
 
 /**
  * Regular expression patterns used to detect TikTok live stream notifications.
@@ -71,8 +72,9 @@ export const DATABASE_DEFAULTS = Object.freeze({
 
 /**
  * Current semantic version of the application.
+ * * Pulled dynamically from package.json to ensure consistency across the app.
  */
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = packageJson.version;
 
 /**
  * Configuration settings for the file-based logging system.

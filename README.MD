@@ -1,316 +1,174 @@
 # TikTok Notification Forwarder Bot
 
-Bot Discord yang mendeteksi notifikasi TikTok Live dari bot sumber dan meneruskannya ke channel yang sesuai berdasarkan mapping username. Bot mendukung **multi-server** dengan central core server untuk forwarding.
+Bot Discord production-ready yang mendeteksi notifikasi TikTok Live dari bot sumber dan meneruskannya ke channel yang sesuai berdasarkan mapping.
 
-## 🚀 Fitur
+Versi **2.1.0** memperkenalkan **Adapter Pattern** pada layer database, memungkinkan fleksibilitas penuh untuk menggunakan **SQLite** (tanpa setup server) atau **PostgreSQL** (untuk skala besar) tanpa mengubah logika bisnis.
 
-- **Auto-Detection**: Mendeteksi notifikasi live dari bot sumber menggunakan multiple regex patterns
-- **Multi-Server Support**: Bot dapat ditambahkan ke server lain dan meneruskan notifikasi ke core server
-- **Smart Forwarding**: Meneruskan notifikasi ke channel yang ditentukan per user
-- **Central Mapping**: Semua mapping disimpan di core server dan diakses dari semua server
-- **Database Mapping**: Menyimpan mapping username ke channel menggunakan Prisma + SQLite
-- **Slash Commands**: Interface `/mapping` untuk mengelola routing (add, remove, list, info)
-- **Retry Logic**: Operasi database dan Discord dengan automatic retry dan exponential backoff
-- **Structured Logging**: Winston logger dengan file rotation dan structured metadata
-- **Type-Safe**: Full TypeScript dengan strict mode dan TSDoc documentation
-- **Production-Ready**: Error handling, graceful shutdown, dan environment validation
+## 🚀 Fitur Baru v2.1
 
-## 📋 Prerequisites
+- **Dual Database Support**: Dukungan native untuk SQLite (`better-sqlite3`) dan PostgreSQL (`pg`).
+- **Zero-Dependency Start**: Mode SQLite berjalan langsung dari file lokal. Tidak butuh Docker atau install server database.
+- **Auto-Migration**: Sistem migrasi mandiri yang mendeteksi driver aktif dan menjalankan skema SQL yang sesuai saat startup.
+- **Hot-Reload Config**: Update konfigurasi bot tanpa restart via command `/menu`.
 
-- Node.js 18+
-- npm atau yarn
-- Discord Bot Token dengan intents: Guilds, GuildMessages, MessageContent
+## 📋 Fitur Utama
 
-## 🔧 Setup
+- **Auto-Detection**: Mendeteksi notifikasi live menggunakan multiple regex patterns.
+- **Multi-Server Support**: Bot dapat meneruskan notifikasi dari server eksternal ke core server.
+- **Smart Forwarding**: Routing notifikasi ke channel spesifik per user.
+- **Central Mapping**: Semua mapping disimpan terpusat di core server.
+- **Slash Commands**: Manajemen via `/mapping`, `/admin`, dan `/menu`.
+- **Resilience**: Retry logic otomatis dengan exponential backoff.
+- **Structured Logging**: Winston logger dengan file rotation (JSON & Human Readable).
+
+## 🔧 Setup Guide
 
 ### 1. Install Dependencies
 
 ```bash
 npm install
+
 ```
 
 ### 2. Configure Environment
 
-Salin `.env.example` ke `.env` dan isi:
+Salin `.env.example` ke `.env`:
 
 ```bash
 cp .env.example .env
+
 ```
 
-Edit `.env`:
+Edit `.env` dan pilih mode database Anda:
+
 ```env
+# --- DISCORD ---
 DISCORD_TOKEN=your_bot_token
-SOURCE_BOT_ID=id_bot_sumber
-CORE_SERVER_ID=id_server_utama
-FALLBACK_CHANNEL_ID=id_channel_fallback
-DATABASE_URL="file:./dev.db"
-NODE_ENV=development
+CLIENT_ID=your_client_id
+OWNER_ID=your_discord_id
+SOURCE_BOT_IDS=123456789,987654321
+CORE_SERVER_ID=main_guild_id
+FALLBACK_CHANNEL_ID=log_channel_id
+
+# --- DATABASE OPTION 1: SQLite (Recommended untuk Local/Small Scale) ---
+DATABASE_URL=sqlite://./database.sqlite
+DB_DRIVER=sqlite
+
+# --- DATABASE OPTION 2: PostgreSQL (Untuk High Performance) ---
+# DATABASE_URL=postgres://user:pass@localhost:5432/dbname
+# DB_DRIVER=postgres
+
+# --- TUNING ---
+DB_MAX_CONNECTIONS=10
+DB_MIN_CONNECTIONS=2
+NODE_ENV=production
 LOG_LEVEL=info
+
 ```
 
-**Penting:** 
-- `CORE_SERVER_ID`: ID server utama tempat mapping dikonfigurasi
-- `FALLBACK_CHANNEL_ID`: Harus channel di dalam CORE_SERVER_ID
-- `NODE_ENV`: `development` atau `production`
-- `LOG_LEVEL`: `error`, `warn`, `info`, atau `debug`
+### 3. Build Project
 
-### 3. Setup Database
+Langkah ini penting untuk meng-compile TypeScript dan **menyalin aset migrasi SQL** ke folder dist.
 
-```bash
-npm run prisma:generate
-npm run prisma:migrate
-```
-
-### 4. Build & Run
-
-Development:
-```bash
-npm run dev
-```
-
-Production:
 ```bash
 npm run build
+
+```
+
+### 4. Run Bot
+
+Bot akan secara otomatis menjalankan migrasi database (membuat tabel) saat pertama kali dijalankan.
+
+```bash
 npm start
+
 ```
 
 ## 📖 Usage
 
-### Multi-Server Architecture
-
-Bot bekerja dengan dua mode:
-
-#### Mode 1: Core Server (Server Utama)
-Ketika notifikasi terdeteksi di core server:
-- Bot langsung melakukan mapping berdasarkan database
-- Mengirim ke channel sesuai konfigurasi
-- React dengan emoji 📬
-
-#### Mode 2: External Server (Server Lain)
-Ketika notifikasi terdeteksi di server lain:
-- Bot membaca username dari notifikasi
-- Meneruskan ke core server dengan informasi tambahan
-- Bot di core server melakukan mapping dan forwarding
-- React dengan emoji 🌐 di server sumber
-- Embed menunjukkan asal server
-
 ### Slash Commands
 
-**Add/Update Mapping:**
-```
-/mapping add username:creator123 channel:#live-notifications
-```
+| Command | Subcommand | Deskripsi | Permission |
+| --- | --- | --- | --- |
+| `/menu` | - | Membuka Control Panel Interaktif | Admin |
+| `/mapping` | `add` | Menambah mapping user TikTok -> Channel | Sudo+ |
+| `/mapping` | `remove` | Menghapus mapping | Admin |
+| `/mapping` | `list` | Melihat semua mapping aktif | Sudo+ |
+| `/mapping` | `info` | Cek detail mapping spesifik | Sudo+ |
+| `/admin` | `setrole` | Mengangkat staff (Admin/Sudo) | Owner/Admin |
+| `/admin` | `revoke` | Mencabut akses staff | Owner/Admin |
 
-**Remove Mapping:**
-```
-/mapping remove username:creator123
-```
+### Multi-Server Architecture
 
-**List All Mappings:**
-```
-/mapping list
-```
-
-**Get Mapping Info:**
-```
-/mapping info username:creator123
-```
-
-## 🔍 Detection Logic
-
-Bot mendeteksi notifikasi live menggunakan patterns:
-- `@username is live`
-- `@username started live`
-- `@username went live`
-- `live @username`
-- `@username live`
-
-Bot juga mengekstrak username dari:
-- Message content
-- Embed fields (title, description, author)
-- Button/Link URLs (tiktok.com/@username)
+1. **Core Server**: Server utama tempat bot dikonfigurasi. Notifikasi dari bot sumber di sini akan langsung diteruskan ke channel tujuan.
+2. **External Server**: Server lain tempat bot diundang. Bot akan mendeteksi notifikasi di sini, lalu meneruskannya ("forward") ke Core Server dengan atribusi sumber (Embed Footer: "From Server X").
 
 ## 🏗️ Architecture
 
 ```
 src/
-├── config.ts              # Environment configuration & validation
-├── index.ts               # Entry point & event handlers
-├── commands/
-│   └── mapping.ts         # Slash command handlers (CRUD)
-├── services/
-│   └── forwarder.ts       # Core forwarding logic
-├── utils/
-│   ├── logger.ts          # Winston logger setup
-│   └── retry.ts           # Retry logic utility
-├── types/
-│   └── index.ts           # TypeScript type definitions
-└── constants/
-    └── index.ts           # Application constants
-```
-
-### Code Quality Features
-
-- **Full TSDoc Documentation**: Semua fungsi dan interface terdokumentasi
-- **Type Safety**: Strict TypeScript dengan no implicit any
-- **Reusable Components**: Modular design dengan separation of concerns
-- **Constants Management**: Centralized constants untuk maintainability
-- **Error Handling**: Comprehensive try-catch dengan structured logging
-- **Graceful Shutdown**: Clean disconnect untuk database dan Discord client
-
-### Flow Diagram
+├── commands/             # Handler Slash Command
+├── controllers/          # Logika interaksi UI (Button/Modal)
+├── core/
+│   ├── config/           # Config Manager & Loader
+│   ├── database/         # Database Layer
+│   │   ├── migrations/   # SQL Files (Postgres & SQLite separated)
+│   │   ├── connection.ts # Adapter Pattern Logic (Driver Switcher)
+│   │   └── transaction.ts# Abstract Transaction Handler
+│   └── types/            # Type Definitions
+├── repositories/         # Data Access Layer (SQL Queries)
+├── services/             # Business Logic (Notification, Forwarder, Migration)
+└── utils/                # Helper (Logger, Retry, Validation)
 
 ```
-External Server          Core Server
-     │                        │
-     ├─ Bot detects TikTok    │
-     │  notification          │
-     │                        │
-     ├─ Extract username      │
-     │                        │
-     ├──────────────────────►│
-     │  Forward to core       │
-     │                        │
-     │                        ├─ Query mapping DB
-     │                        │
-     │                        ├─ Get target channel
-     │                        │
-     │                        ├─ Send notification
-     │                        │  with source info
-     │◄───────────────────────┤
-     React with 🌐            React with 📬
-```
 
-## 🔐 Security & Best Practices
+## 🛠️ Maintenance & Troubleshooting
 
-- Strict TypeScript typing dengan compile-time safety
-- Environment variable validation saat startup
-- Snowflake ID validation untuk Discord IDs
-- Comprehensive error handling & logging
-- Rate limit handling dengan exponential backoff
-- Database connection pooling
-- Server isolation (mapping hanya di core server)
-- No sensitive data in logs
-- Graceful shutdown untuk cleanup
+### Database Backup (SQLite)
 
-## 📝 Logging
+Cukup copy file `database.sqlite` yang ada di root folder.
 
-Logs tersimpan di:
-- `logs/combined.log` - All logs with structured metadata
-- `logs/error.log` - Error logs only
-
-Log mencakup informasi:
-- Server asal (guild ID & name)
-- Core server detection
-- Mapping status (used/fallback)
-- Forwarding success/failure
-- Detailed error stacks
-- Structured metadata untuk debugging
-
-Console output dengan color-coding untuk development.
-
-## 🛠️ Maintenance
-
-**View Logs:**
 ```bash
-# Follow combined logs
-tail -f logs/combined.log
+cp database.sqlite backup_$(date +%Y%m%d).sqlite
 
-# Follow error logs
-tail -f logs/error.log
-
-# Search logs
-grep "username" logs/combined.log
 ```
 
-**Database Backup:**
+### Reset Database
+
+Hapus file database dan restart bot untuk regenerasi ulang.
+
 ```bash
-cp dev.db dev.db.backup.$(date +%Y%m%d)
+rm database.sqlite
+npm start
+
 ```
 
-**Reset Database:**
+### Common Issues
+
+**Error: `no such function: NOW**`
+
+* Ini terjadi jika Anda menjalankan skema PostgreSQL di driver SQLite.
+* **Solusi**: Pastikan Anda menggunakan kode versi 2.1.0+. Sistem migrasi sekarang otomatis memilih folder `migrations/sqlite` atau `migrations/postgres` sesuai config `.env`.
+
+**Database Locked (SQLite)**
+
+* Bot menggunakan mode WAL (Write-Ahead Logging) untuk performa tinggi. Pastikan tidak ada aplikasi lain (seperti DB Browser) yang menahan lock file database dalam mode "Write" saat bot berjalan.
+
+## 🚀 Deployment (PM2)
+
 ```bash
-rm dev.db
-npm run prisma:migrate
-```
-
-**Check Active Servers:**
-Bot akan log semua server yang aktif saat startup, termasuk menandai core server.
-
-**Health Check:**
-Bot status dan presence dapat dilihat di Discord:
-- Status: Online
-- Activity: "Watching TikTok notifications"
-
-## 🧪 Development
-
-**TypeScript Compilation:**
-```bash
+# 1. Build
 npm run build
-```
 
-**Type Checking:**
-```bash
-npx tsc --noEmit
-```
-
-**Generate Prisma Client:**
-```bash
-npm run prisma:generate
-```
-
-## 🚀 Deployment
-
-### Production Checklist
-
-1. Set `NODE_ENV=production` di `.env`
-2. Build project: `npm run build`
-3. Pastikan logs directory exists
-4. Setup log rotation (logrotate)
-5. Use process manager (PM2, systemd)
-6. Monitor error logs
-7. Setup database backups
-8. Configure firewall rules
-
-### PM2 Example
-
-```bash
+# 2. Start
 pm2 start dist/index.js --name tiktok-forwarder
+
+# 3. Save & Startup
 pm2 save
 pm2 startup
+
 ```
-
-## 🤝 Contributing
-
-1. Fork repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Create Pull Request
 
 ## 📄 License
 
 MIT License
-
-## 📞 Support
-
-Jika ada issue atau pertanyaan:
-1. Check logs di `logs/` directory
-2. Verify environment variables
-3. Check bot permissions di Discord
-4. Review documentation
-
-## 🎯 Performance
-
-- Average latency: < 100ms untuk forwarding
-- Database queries: < 50ms dengan indexing
-- Memory usage: ~50MB base + ~2MB per 1000 mappings
-- CPU usage: Minimal (event-driven)
-
-## 🔄 Updates
-
-Version 1.0.0 - Initial Release
-- Multi-server support
-- Full TypeScript with TSDoc
-- Comprehensive error handling
-- Production-ready logging

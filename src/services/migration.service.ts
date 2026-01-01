@@ -2,40 +2,47 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { database } from '../core/database/connection';
+import { configManager } from '../core/config/config';
 import { logger } from '../utils/logger';
 
 /**
  * Service responsible for managing database schema migrations.
- * * Automates the application of SQL scripts to keep the database schema in sync 
- * with the codebase.
- * * Tracks executed migrations to prevent duplicate execution.
+ * * Automatically selects the correct migration folder based on the active DB driver.
  */
 export class MigrationService {
   private readonly migrationTable = '_migrations';
-  
-  // Resolves to: dist/core/database/migrations based on the build structure
-  private readonly migrationPath = path.join(__dirname, '../core/database/migrations');
+  private migrationPath: string;
+
+  constructor() {
+    const config = configManager.get();
+    
+    // Determine path based on driver
+    // Assumes structure: dist/core/database/migrations/{driver_name}
+    // We map 'postgres' to 'postgres' folder and 'sqlite' to 'sqlite' folder
+    const driverFolder = config.database.driver === 'sqlite' ? 'sqlite' : 'postgres';
+    
+    this.migrationPath = path.join(
+      __dirname, 
+      '../core/database/migrations', 
+      driverFolder
+    );
+  }
 
   /**
    * Orchestrates the migration process.
-   * * 1. Ensures the internal tracking table exists.
-   * * 2. Scans the file system for SQL migration files.
-   * * 3. Filters out migrations that have already been applied.
-   * * 4. Executes pending migrations sequentially.
    */
   async run(): Promise<void> {
-    logger.info('Checking for database migrations...');
+    logger.info(`Checking for database migrations in: ${this.migrationPath}`);
 
     await this.ensureMigrationTable();
 
     const files = await this.getMigrationFiles();
     if (files.length === 0) {
-      logger.info('No migration files found.');
+      logger.info('No migration files found for the current driver.');
       return;
     }
 
     const executed = await this.getExecutedMigrations();
-
     const pending = files.filter(f => !executed.includes(f));
 
     if (pending.length === 0) {
@@ -54,78 +61,98 @@ export class MigrationService {
 
   /**
    * Creates the migration tracking table if it does not exist.
-   * * This table stores the names of executed SQL files and their execution timestamps.
+   * * Logic adapted for both PG and SQLite syntax compatibility.
    */
   private async ensureMigrationTable(): Promise<void> {
-    const sql = `
-      CREATE TABLE IF NOT EXISTS ${this.migrationTable} (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE,
-        executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
+    const config = configManager.get();
+    
+    let sql: string;
+    
+    if (config.database.driver === 'sqlite') {
+        sql = `
+        CREATE TABLE IF NOT EXISTS ${this.migrationTable} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            executed_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        `;
+    } else {
+        sql = `
+        CREATE TABLE IF NOT EXISTS ${this.migrationTable} (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL UNIQUE,
+            executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        `;
+    }
+
     await database.query(sql);
   }
 
-  /**
-   * Scans the configured migration directory for SQL files.
-   * * Sorts files alphabetically to ensure correct execution order (e.g., 001_init, 002_update).
-   * * Creates the directory if it does not exist to prevent errors.
-   * * @returns A sorted list of SQL filenames.
-   */
   private async getMigrationFiles(): Promise<string[]> {
     try {
       const files = await fs.readdir(this.migrationPath);
       return files.filter(f => f.endsWith('.sql')).sort();
     } catch (error) {
-      logger.warn('Migration directory not found, attempting to create...', { path: this.migrationPath });
-      await fs.mkdir(this.migrationPath, { recursive: true });
+      logger.warn(`Migration directory not found: ${this.migrationPath}`);
+      // Create it to prevent errors on next run (optional)
+      // await fs.mkdir(this.migrationPath, { recursive: true });
       return [];
     }
   }
 
-  /**
-   * Retrieves the list of migrations that have already been applied to the database.
-   * * @returns An array of executed migration filenames.
-   */
   private async getExecutedMigrations(): Promise<string[]> {
     const sql = `SELECT name FROM ${this.migrationTable}`;
     const result = await database.query<{ name: string }>(sql);
     return result.rows.map(r => r.name);
   }
 
-  /**
-   * Executes a single migration file within a strict database transaction.
-   * * Reads the file content, executes the SQL, and records the execution in the tracking table.
-   * * **Atomic Operation:** If any part fails, the entire transaction is rolled back.
-   * * @param filename - The name of the SQL file to execute.
-   * * @throws {Error} If the migration fails, halting the entire process.
-   */
   private async runMigration(filename: string): Promise<void> {
     const filePath = path.join(this.migrationPath, filename);
     const sqlContent = await fs.readFile(filePath, 'utf-8');
 
     logger.info(`Executing migration: ${filename}`);
-
+    
+    // We use the simpler direct query approach here since specific transaction logic
+    // is handled differently per driver in our connection.ts, but for migrations
+    // we want atomic execution.
     const client = await database.getClient();
-    try {
-      await client.query('BEGIN');
-      
-      await client.query(sqlContent);
-      
-      await client.query(
-        `INSERT INTO ${this.migrationTable} (name) VALUES ($1)`,
-        [filename]
-      );
+    
+    // Determine how to run transaction manually based on object type
+    // (This is a simplified version of what we did in transaction.ts)
+    const isPostgres = typeof client.query === 'function' && !client.prepare;
 
-      await client.query('COMMIT');
-      logger.info(`Migration ${filename} completed.`);
+    try {
+        if (isPostgres) {
+            await client.query('BEGIN');
+            await client.query(sqlContent);
+            await client.query(
+                `INSERT INTO ${this.migrationTable} (name) VALUES ($1)`,
+                [filename]
+            );
+            await client.query('COMMIT');
+        } else {
+            // SQLite (better-sqlite3)
+            client.prepare('BEGIN').run();
+            try {
+                client.exec(sqlContent); // Use exec for multiple statements in one file
+                client.prepare(`INSERT INTO ${this.migrationTable} (name) VALUES (?)`).run(filename);
+                client.prepare('COMMIT').run();
+            } catch (innerErr) {
+                client.prepare('ROLLBACK').run();
+                throw innerErr;
+            }
+        }
+        
+        logger.info(`Migration ${filename} completed.`);
     } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error(`Migration ${filename} failed!`, { error: (error as Error).message });
-      throw error;
+        if (isPostgres) {
+            await client.query('ROLLBACK');
+        }
+        logger.error(`Migration ${filename} failed!`, { error: (error as Error).message });
+        throw error;
     } finally {
-      client.release();
+        if (isPostgres) client.release();
     }
   }
 }

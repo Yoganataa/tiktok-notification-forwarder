@@ -1,13 +1,15 @@
 // src/core/database/connection.ts
-import { Pool, PoolClient, PoolConfig, QueryResult, QueryResultRow } from 'pg';
+import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import DatabaseConstructor, { Database as SQLiteDB } from 'better-sqlite3';
 import { DatabaseError } from '../errors/database.error';
 import { logger } from '../../utils/logger';
+import { DatabaseDriver } from '../config/config';
 
 /**
  * Configuration interface for the Database connection.
- * * Defines the parameters required to establish a connection pool.
  */
 export interface DatabaseConfig {
+  driver: DatabaseDriver;
   connectionString: string;
   ssl?: boolean;
   maxConnections?: number;
@@ -17,81 +19,170 @@ export interface DatabaseConfig {
 }
 
 /**
- * Singleton Database Wrapper Class.
- * * Manages the PostgreSQL connection pool using `pg`.
- * * Provides methods for executing queries, transaction management, and graceful shutdown.
+ * Interface defining the contract for Database Adapters.
+ * Ensures consistent behavior regardless of the underlying driver.
  */
-class Database {
-  private pool: Pool | null = null;
-  private isShuttingDown = false;
+export interface IDatabaseAdapter {
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>>;
+  getRawClient(): Promise<any>;
+}
 
-  /**
-   * Initializes the database connection pool.
-   * * Configures the pool with provided settings (SSL, timeouts, limits).
-   * * Sets up event listeners for pool errors and connection events.
-   * * Performs an immediate connectivity test ('SELECT 1') to validate the configuration.
-   * * @param config - The database configuration object.
-   * * @throws {DatabaseError} If the initial connection test fails.
-   */
-  async connect(config: DatabaseConfig): Promise<void> {
-    if (this.pool) {
-      logger.warn('Database already connected');
-      return;
-    }
+/**
+ * PostgreSQL Implementation using 'pg'
+ */
+class PostgresAdapter implements IDatabaseAdapter {
+  private pool: Pool;
 
-    const poolConfig: PoolConfig = {
+  constructor(config: DatabaseConfig) {
+    this.pool = new Pool({
       connectionString: config.connectionString,
       ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
       min: config.minConnections ?? 2,
       max: config.maxConnections ?? 10,
       idleTimeoutMillis: config.idleTimeoutMs ?? 30000,
       connectionTimeoutMillis: config.connectionTimeoutMs ?? 5000,
+    });
+  }
+
+  async connect(): Promise<void> {
+    const client = await this.pool.connect();
+    await client.query('SELECT 1');
+    client.release();
+  }
+
+  async disconnect(): Promise<void> {
+    await this.pool.end();
+  }
+
+  async query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
+    return await this.pool.query<T>(text, params);
+  }
+
+  async getRawClient(): Promise<PoolClient> {
+    return await this.pool.connect();
+  }
+
+  getStats() {
+    return {
+      total: this.pool.totalCount,
+      idle: this.pool.idleCount,
+      waiting: this.pool.waitingCount,
     };
+  }
+}
 
-    this.pool = new Pool(poolConfig);
+/**
+ * SQLite Implementation using 'better-sqlite3'
+ */
+class SqliteAdapter implements IDatabaseAdapter {
+  private db: SQLiteDB | null = null;
+  private path: string;
 
-    this.pool.on('error', (err) => {
-      logger.error('Unexpected database pool error', { error: err.message });
-    });
+  constructor(config: DatabaseConfig) {
+    // Remove protocol prefix if present (sqlite://)
+    this.path = config.connectionString.replace('sqlite://', '');
+  }
 
-    this.pool.on('connect', () => {
-      logger.debug('New database client connected');
-    });
-
+  async connect(): Promise<void> {
     try {
-      const client = await this.pool.connect();
-      await client.query('SELECT 1');
-      client.release();
-      logger.info('Database connection established successfully');
+      this.db = new DatabaseConstructor(this.path);
+      this.db.pragma('journal_mode = WAL'); // Optimization
+      this.db.prepare('SELECT 1').run();
     } catch (error) {
-      throw new DatabaseError(
-        'Failed to establish database connection',
-        error as Error
-      );
+      throw error;
     }
   }
 
-  /**
-   * Executes a parameterized SQL query against the pool.
-   * * Wraps the native query execution with performance logging and error handling.
-   * * Automatically masks query parameters in logs for security.
-   * * @template T - The expected shape of the resulting rows.
-   * * @param text - The SQL query string.
-   * * @param params - Optional array of values to substitute into the query.
-   * * @returns The result of the query including rows and row count.
-   */
-  async query<T extends QueryResultRow = any>(
-    text: string,
-    params?: any[]
-  ): Promise<QueryResult<T>> {
-    if (!this.pool) {
-      throw new DatabaseError('Database not initialized');
+  async disconnect(): Promise<void> {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+  }
+
+  async query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
+    if (!this.db) throw new Error('Database closed');
+
+    // Normalize Parameters: Convert Postgres style ($1, $2) to SQLite style (?)
+    const normalizedText = text.replace(/\$\d+/g, '?');
+
+    return new Promise((resolve, reject) => {
+      try {
+        const stmt = this.db!.prepare(normalizedText);
+        let rows: T[] = [];
+        let rowCount = 0;
+
+        if (stmt.reader) {
+          rows = stmt.all(params || []) as T[];
+          rowCount = rows.length;
+        } else {
+          const info = stmt.run(params || []);
+          rowCount = info.changes;
+          // Imitate RETURNING behavior for inserts if needed, but basic support handles rowCount
+          if (text.toLowerCase().includes('returning') && info.lastInsertRowid) {
+             // Note: Better-sqlite3 does not natively support RETURNING clause perfectly in run()
+             // for the result set without extra logic, but for simple migrations/inserts it works.
+          }
+        }
+
+        // Return a shape mimicking pg.QueryResult
+        resolve({
+          rows,
+          rowCount,
+          command: text.split(' ')[0],
+          oid: 0,
+          fields: []
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  async getRawClient(): Promise<SQLiteDB> {
+    if (!this.db) throw new Error('Database closed');
+    return this.db;
+  }
+}
+
+/**
+ * Main Database Wrapper
+ * Acts as the Factory and Proxy for the specific adapter.
+ */
+class Database {
+  private adapter: IDatabaseAdapter | null = null;
+  private isShuttingDown = false;
+
+  async connect(config: DatabaseConfig): Promise<void> {
+    if (this.adapter) {
+      logger.warn('Database already connected');
+      return;
     }
 
-    const start = Date.now();
-    
     try {
-      const result = await this.pool.query<T>(text, params);
+      if (config.driver === 'sqlite') {
+        logger.info('Initializing SQLite Adapter...');
+        this.adapter = new SqliteAdapter(config);
+      } else {
+        logger.info('Initializing PostgreSQL Adapter...');
+        this.adapter = new PostgresAdapter(config);
+      }
+
+      await this.adapter.connect();
+      logger.info('Database connection established successfully');
+    } catch (error) {
+      throw new DatabaseError('Failed to establish database connection', error as Error);
+    }
+  }
+
+  async query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
+    if (!this.adapter) throw new DatabaseError('Database not initialized');
+    
+    const start = Date.now();
+    try {
+      const result = await this.adapter.query<T>(text, params);
       const duration = Date.now() - start;
 
       logger.debug('Query executed', {
@@ -105,79 +196,37 @@ class Database {
       logger.error('Database query error', {
         error: err.message,
         query: text,
-        params: params?.map(() => '?'),
+        params: params?.map(() => '?'), // Mask params
       });
       throw new DatabaseError(`Query failed: ${err.message}`, err);
     }
   }
 
-  /**
-   * Acquires a raw client from the pool.
-   * * Useful for operations requiring a dedicated client, such as transactions (BEGIN/COMMIT).
-   * * **Important:** The caller is responsible for releasing the client back to the pool.
-   * * @returns A promise that resolves to a `PoolClient`.
-   */
-  async getClient(): Promise<PoolClient> {
-    if (!this.pool) {
-      throw new DatabaseError('Database not initialized');
-    }
-
-    try {
-      return await this.pool.connect();
-    } catch (error) {
-      throw new DatabaseError(
-        'Failed to acquire database client',
-        error as Error
-      );
-    }
+  async getClient(): Promise<any> {
+    if (!this.adapter) throw new DatabaseError('Database not initialized');
+    return this.adapter.getRawClient();
   }
 
-  /**
-   * Gracefully shuts down the database connection pool.
-   * * Waits for active clients to finish before closing (handled by `pool.end()`).
-   * * Prevents new connections during the shutdown phase.
-   */
   async disconnect(): Promise<void> {
-    if (this.isShuttingDown) {
-      return;
-    }
-
+    if (this.isShuttingDown || !this.adapter) return;
     this.isShuttingDown = true;
 
-    if (this.pool) {
-      try {
-        await this.pool.end();
-        this.pool = null;
-        logger.info('Database connections closed successfully');
-      } catch (error) {
-        logger.error('Error closing database connections', {
-          error: (error as Error).message,
-        });
-        throw new DatabaseError(
-          'Failed to close database connections',
-          error as Error
-        );
-      }
+    try {
+      await this.adapter.disconnect();
+      this.adapter = null;
+      logger.info('Database connections closed successfully');
+    } catch (error) {
+      logger.error('Error closing database connections', { error: (error as Error).message });
+      throw new DatabaseError('Failed to close database connections', error as Error);
     }
   }
 
-  /**
-   * Retrieves current statistics about the connection pool.
-   * * Useful for monitoring health and load.
-   * * @returns An object containing total, idle, and waiting client counts.
-   */
   getPoolStats() {
-    if (!this.pool) {
-      return null;
+    if (this.adapter instanceof PostgresAdapter) {
+      return this.adapter.getStats();
     }
-
-    return {
-      total: this.pool.totalCount,
-      idle: this.pool.idleCount,
-      waiting: this.pool.waitingCount,
-    };
+    return null; // SQLite does not have a pool
   }
 }
 
-// Singleton instance
 export const database = new Database();

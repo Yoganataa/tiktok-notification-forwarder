@@ -1,22 +1,26 @@
 // src/core/database/transaction.ts
 import { PoolClient } from 'pg';
+import { Database as SQLiteDB } from 'better-sqlite3';
 import { database } from './connection';
 import { DatabaseError } from '../errors/database.error';
 import { logger } from '../../utils/logger';
 
+// Define a union type for our possible clients
+type IDatabaseClient = PoolClient | SQLiteDB;
+
 /**
  * Manages the lifecycle of a database transaction.
- * * Handles acquiring a dedicated client from the pool, executing the transaction
- * commands (BEGIN, COMMIT, ROLLBACK), and releasing the client back to the pool.
+ * * Handles acquiring a dedicated client/connection, executing the transaction
+ * commands (BEGIN, COMMIT, ROLLBACK), and releasing the client.
  */
 export class Transaction {
-  private client: PoolClient | null = null;
+  private client: any = null; // Can be PG Client or SQLite DB
   private isActive = false;
+  private isPostgres = false;
 
   /**
    * Starts a new database transaction.
-   * * Acquires a dedicated client from the database pool and executes the 'BEGIN' command.
-   * * @throws {DatabaseError} If a transaction is already active on this instance.
+   * * Acquires a client and executes 'BEGIN'.
    */
   async begin(): Promise<void> {
     if (this.isActive) {
@@ -24,15 +28,24 @@ export class Transaction {
     }
 
     this.client = await database.getClient();
-    await this.client.query('BEGIN');
+    
+    // Determine driver type for specific handling if needed
+    // 'query' exists on PG Client, 'prepare' exists on SQLite
+    this.isPostgres = typeof this.client.query === 'function' && !this.client.prepare;
+
+    if (this.isPostgres) {
+      await (this.client as PoolClient).query('BEGIN');
+    } else {
+      // SQLite (better-sqlite3)
+      (this.client as SQLiteDB).prepare('BEGIN').run();
+    }
+    
     this.isActive = true;
     logger.debug('Transaction started');
   }
 
   /**
    * Commits the current transaction.
-   * * Persists all changes made during the transaction and releases the client.
-   * * @throws {DatabaseError} If no transaction is currently active.
    */
   async commit(): Promise<void> {
     if (!this.isActive || !this.client) {
@@ -40,19 +53,19 @@ export class Transaction {
     }
 
     try {
-      await this.client.query('COMMIT');
+      if (this.isPostgres) {
+        await (this.client as PoolClient).query('COMMIT');
+      } else {
+        (this.client as SQLiteDB).prepare('COMMIT').run();
+      }
       logger.debug('Transaction committed');
     } finally {
-      this.client.release();
-      this.isActive = false;
-      this.client = null;
+      this.release();
     }
   }
 
   /**
    * Rolls back the current transaction.
-   * * Reverts all pending changes and releases the client.
-   * * Safe to call even if the transaction state is inconsistent.
    */
   async rollback(): Promise<void> {
     if (!this.isActive || !this.client) {
@@ -60,39 +73,43 @@ export class Transaction {
     }
 
     try {
-      await this.client.query('ROLLBACK');
+      if (this.isPostgres) {
+        await (this.client as PoolClient).query('ROLLBACK');
+      } else {
+        (this.client as SQLiteDB).prepare('ROLLBACK').run();
+      }
       logger.debug('Transaction rolled back');
     } finally {
-      this.client.release();
-      this.isActive = false;
-      this.client = null;
+      this.release();
     }
   }
 
   /**
    * Retrieves the active database client for this transaction.
-   * * Used to execute queries within the context of the transaction.
-   * * @returns The active `PoolClient`.
-   * * @throws {DatabaseError} If the transaction is not active.
    */
-  getClient(): PoolClient {
+  getClient(): IDatabaseClient {
     if (!this.client || !this.isActive) {
       throw new DatabaseError('No active transaction');
     }
     return this.client;
+  }
+
+  private release() {
+    if (this.client && this.isPostgres) {
+      (this.client as PoolClient).release();
+    }
+    // SQLite connection is persistent, no release needed for the object itself
+    this.isActive = false;
+    this.client = null;
   }
 }
 
 /**
  * Higher-order function to execute a block of code within a transaction scope.
  * * Automatically handles `begin`, `commit`, and `rollback` logic.
- * * If the provided function throws an error, the transaction is automatically rolled back.
- * * @template T - The return type of the callback function.
- * @param fn - An async function that receives the transactional client.
- * @returns The result of the callback function `fn`.
  */
 export async function withTransaction<T>(
-  fn: (client: PoolClient) => Promise<T>
+  fn: (client: IDatabaseClient) => Promise<T>
 ): Promise<T> {
   const transaction = new Transaction();
 

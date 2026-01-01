@@ -82,7 +82,9 @@ class Application {
     try {
       logger.info('🚀 Starting TikTok Notification Forwarder Bot...');
 
+      // PERBAIKAN DI SINI: Menambahkan properti 'driver'
       await database.connect({
+        driver: this.config.database.driver, 
         connectionString: this.config.database.url,
         ssl: this.config.database.ssl,
         maxConnections: this.config.database.maxConnections,

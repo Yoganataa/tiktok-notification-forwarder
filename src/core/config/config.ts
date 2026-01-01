@@ -6,9 +6,10 @@ import { SystemConfigRepository } from '../../repositories/system-config.reposit
 
 dotenv.config();
 
+export type DatabaseDriver = 'postgres' | 'sqlite';
+
 /**
  * Interface defining the application's configuration structure.
- * * Categorizes settings into Discord, Bot, Database, and Application specific scopes.
  */
 export interface AppConfig {
   discord: {
@@ -22,7 +23,8 @@ export interface AppConfig {
     fallbackChannelId: string;
   };
   database: {
-    url: string;
+    driver: DatabaseDriver;
+    url: string; // Connection string for PG, or File Path for SQLite
     maxConnections: number;
     minConnections: number;
     ssl: boolean;
@@ -33,28 +35,23 @@ export interface AppConfig {
   };
 }
 
-/**
- * Manager class for handling application configuration from multiple sources.
- * * Loads initial values from environment variables (`.env`).
- * * Hydrates and overrides configuration with dynamic values stored in the database.
- * * Handles auto-seeding of the database with environment defaults on a fresh install.
- */
 class ConfigManager {
   private config: AppConfig | null = null;
 
-  /**
-   * Loads the base configuration from system environment variables.
-   * * Validates the presence of critical keys (`DISCORD_TOKEN`, `CLIENT_ID`, etc.).
-   * * @throws {ValidationError} If required environment variables are missing.
-   * * @returns The initial configuration object populated from `.env`.
-   */
   load(): AppConfig {
     if (this.config) return this.config;
 
     const requiredVars = ['DISCORD_TOKEN', 'CLIENT_ID', 'OWNER_ID', 'DATABASE_URL'];
     const missing = requiredVars.filter((key) => !process.env[key]);
+    
     if (missing.length > 0) {
       throw new ValidationError(`Missing required env vars: ${missing.join(', ')}`);
+    }
+
+    // Determine driver based on ENV or URL prefix
+    let driver: DatabaseDriver = 'postgres';
+    if (process.env.DB_DRIVER === 'sqlite' || process.env.DATABASE_URL!.startsWith('sqlite')) {
+      driver = 'sqlite';
     }
 
     this.config = {
@@ -69,6 +66,7 @@ class ConfigManager {
         fallbackChannelId: process.env.FALLBACK_CHANNEL_ID || '0',
       },
       database: {
+        driver: driver,
         url: process.env.DATABASE_URL!,
         maxConnections: parseInt(process.env.DB_MAX_CONNECTIONS || '10'),
         minConnections: parseInt(process.env.DB_MIN_CONNECTIONS || '2'),
@@ -83,26 +81,16 @@ class ConfigManager {
     return this.config;
   }
 
-  /**
-   * Fetches dynamic configuration overrides from the database.
-   * * If the database configuration table is empty (or near empty), it triggers an
-   * auto-seed process using current environment variables.
-   * * Updates the in-memory configuration object with values found in the database.
-   * * @param repository - The repository instance used to access system settings.
-   */
   async loadFromDatabase(repository: SystemConfigRepository): Promise<void> {
     if (!this.config) this.load();
 
     try {
       const settings = await repository.findAll();
-
-      // Detect if DB is in an initial state (empty or minimal default entries)
       const isInitialState = settings.length <= 2;
       
       if (isInitialState) {
         logger.info('Database configuration is empty. Initializing Auto-Seed...');
         await this.seedDatabase(repository);
-        // After seeding, memory config matches DB state, so no further action is needed
         return;
       }
 
@@ -145,12 +133,6 @@ class ConfigManager {
     }
   }
 
-  /**
-   * Populates the database with default values derived from the current environment variables.
-   * * This is triggered automatically when the application detects a fresh database state.
-   * * Ensures the admin panel has editable values immediately upon first launch.
-   * * @param repository - The repository instance used to save settings.
-   */
   private async seedDatabase(repository: SystemConfigRepository): Promise<void> {
     const config = this.config!;
     const seedData = {
@@ -171,19 +153,11 @@ class ConfigManager {
     }
   }
 
-  /**
-   * Retrieves the current configuration object.
-   * * @throws {Error} If the configuration has not been initialized via `load()`.
-   */
   get(): AppConfig {
     if (!this.config) throw new Error('Configuration not initialized.');
     return this.config;
   }
 
-  /**
-   * Helper method to parse comma-separated strings into a clean array of IDs.
-   * * Filters out non-numeric values to ensure data integrity.
-   */
   private parseList(value: string): string[] {
     return value.split(',').map((id) => id.trim()).filter((id) => /^\d+$/.test(id));
   }
