@@ -4,6 +4,26 @@ import { BaseRepository } from './base.repository';
 import { AccessControl, UserRole } from '../core/types/database.types';
 import { DatabaseError } from '../core/errors/database.error';
 
+/**
+ * Helper to ensure dates are real JS Date objects.
+ */
+function normalizeDate(date: string | number | Date): Date {
+  if (date instanceof Date) return date;
+  return new Date(date);
+}
+
+/**
+ * Helper to map raw DB row to AccessControl object.
+ */
+function mapRowToAccessControl(row: any): AccessControl {
+  return {
+    user_id: row.user_id,
+    role: row.role as UserRole,
+    added_by: row.added_by,
+    created_at: normalizeDate(row.created_at),
+  };
+}
+
 export class AccessControlRepository extends BaseRepository {
   async getUserRole(
     userId: string,
@@ -30,7 +50,6 @@ export class AccessControlRepository extends BaseRepository {
     addedBy: string,
     client?: PoolClient
   ): Promise<AccessControl> {
-    // FIX: Ubah NOW() menjadi CURRENT_TIMESTAMP
     const sql = `
       INSERT INTO access_control (user_id, role, added_by, created_at)
       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
@@ -41,7 +60,7 @@ export class AccessControlRepository extends BaseRepository {
       RETURNING *
     `;
 
-    const result = await this.queryOne<AccessControl>(
+    const result = await this.queryOne<any>(
       sql,
       [userId, role, addedBy],
       client
@@ -51,7 +70,7 @@ export class AccessControlRepository extends BaseRepository {
       throw new DatabaseError('Failed to upsert access control');
     }
 
-    return result;
+    return mapRowToAccessControl(result);
   }
 
   async delete(userId: string, client?: PoolClient): Promise<boolean> {
@@ -70,6 +89,7 @@ export class AccessControlRepository extends BaseRepository {
       ORDER BY role ASC, created_at DESC
     `;
 
-    return this.queryMany<AccessControl>(sql, [], client);
+    const results = await this.queryMany<any>(sql, [], client);
+    return results.map(mapRowToAccessControl);
   }
 }

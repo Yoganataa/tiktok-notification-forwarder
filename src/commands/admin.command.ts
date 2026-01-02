@@ -5,7 +5,7 @@ import {
   PermissionFlagsBits,
 } from 'discord.js';
 import { PermissionService } from '../services/permission.service';
-import { ROLES } from '../core/types/database.types';
+import { ROLES, UserRole } from '../core/types/database.types';
 
 /**
  * Slash Command Definition for Admin Management.
@@ -30,6 +30,7 @@ export const adminCommand = new SlashCommandBuilder()
           .setDescription('Role to assign')
           .setRequired(true)
           .addChoices(
+            // Menggunakan konstanta ROLES, bukan string manual 'ADMIN'
             { name: 'Admin', value: ROLES.ADMIN },
             { name: 'Sudo User', value: ROLES.SUDO }
           )
@@ -49,7 +50,7 @@ export const adminCommand = new SlashCommandBuilder()
  * * Validates the caller's permissions and routes the request to the appropriate
  * subcommand handler (setrole or revoke).
  * * @param interaction - The interaction object triggered by the command.
- * @param permissionService - The service responsible for handling role assignments and access control.
+ * * @param permissionService - The service responsible for handling role assignments and access control.
  */
 export async function handleAdminCommand(
   interaction: ChatInputCommandInteraction,
@@ -69,9 +70,8 @@ export async function handleAdminCommand(
 
   try {
     if (subcommand === 'setrole') {
-      const role = interaction.options.getString('role', true) as
-        | 'ADMIN'
-        | 'SUDO';
+      // Type casting menggunakan UserRole agar type-safe
+      const role = interaction.options.getString('role', true) as UserRole;
 
       await permissionService.assignRole(
         targetUser.id,

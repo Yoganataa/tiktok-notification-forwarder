@@ -5,6 +5,7 @@ import { configManager } from './core/config/config';
 import { logger } from './utils/logger';
 import { handleInteractionError } from './utils/error-handler';
 import { commandList } from './commands';
+import { APP_VERSION } from './constants';
 
 // Controllers
 import { handleMappingCommand } from './commands/mapping.command';
@@ -50,7 +51,8 @@ class Application {
         GatewayIntentBits.MessageContent,
       ],
       presence: {
-        activities: [{ name: 'TikTok notifications', type: ActivityType.Watching }],
+        // Display the dynamic version from package.json in the bot status
+        activities: [{ name: `TikTok notifications v${APP_VERSION}`, type: ActivityType.Watching }],
         status: 'online',
       },
     });
@@ -80,9 +82,8 @@ class Application {
    */
   async start(): Promise<void> {
     try {
-      logger.info('🚀 Starting TikTok Notification Forwarder Bot...');
+      logger.info(`🚀 Starting TikTok Notification Forwarder Bot v${APP_VERSION}...`);
 
-      // PERBAIKAN DI SINI: Menambahkan properti 'driver'
       await database.connect({
         driver: this.config.database.driver, 
         connectionString: this.config.database.url,
@@ -94,6 +95,9 @@ class Application {
       const migrationService = new MigrationService();
       await migrationService.run();
 
+      // Ensure the database 'VERSION' config matches package.json
+      await this.syncSystemVersion();
+
       await this.configManagerReload();
 
       await this.client.login(this.config.discord.token);
@@ -102,6 +106,23 @@ class Application {
         error: (error as Error).message 
       });
       await this.shutdown(1);
+    }
+  }
+
+  /**
+   * Updates the 'VERSION' key in the database to match the current package.json version.
+   * Ensures the database configuration remains the Single Source of Truth for runtime lookups.
+   */
+  private async syncSystemVersion(): Promise<void> {
+    try {
+      const currentDbVersion = await this.systemConfigRepo.get('VERSION');
+      
+      if (currentDbVersion !== APP_VERSION) {
+        logger.info(`Updating system version in DB: ${currentDbVersion} -> ${APP_VERSION}`);
+        await this.systemConfigRepo.set('VERSION', APP_VERSION);
+      }
+    } catch (error) {
+      logger.warn('Failed to sync version to database', { error: (error as Error).message });
     }
   }
 

@@ -75,7 +75,7 @@ export const mappingCommand = new SlashCommandBuilder()
  * * Routes execution to specific subcommand handlers based on the user's input.
  * * Enforces permission levels: 'Sudo' for general use, 'Admin' for deletion.
  * * @param interaction - The interaction object triggered by the command.
- * @param permissionService - Service to validate user permissions.
+ * * @param permissionService - Service to validate user permissions.
  */
 export async function handleMappingCommand(
   interaction: ChatInputCommandInteraction,
@@ -162,8 +162,12 @@ async function handleAdd(
     userMappingRepo.upsert(username, channel.id)
   );
 
-  const isUpdate =
-    mapping.created_at.getTime() !== mapping.updated_at.getTime();
+  // FIX: Ensure dates are parsed correctly regardless of DB driver (String vs Date object)
+  const createdTime = new Date(mapping.created_at).getTime();
+  const updatedTime = new Date(mapping.updated_at).getTime();
+
+  // If created and updated times are different, it means it was an update
+  const isUpdate = createdTime !== updatedTime;
 
   const embed = new EmbedBuilder()
     .setColor(EMBED_COLORS.SUCCESS)
@@ -291,6 +295,10 @@ async function handleInfo(
     throw new RecordNotFoundError('Mapping', username);
   }
 
+  // FIX: Ensure dates are parsed correctly here too
+  const createdTimestamp = Math.floor(new Date(mapping.created_at).getTime() / 1000);
+  const updatedTimestamp = Math.floor(new Date(mapping.updated_at).getTime() / 1000);
+
   const embed = new EmbedBuilder()
     .setColor(EMBED_COLORS.INFO)
     .setTitle('ℹ️ Mapping Information')
@@ -299,12 +307,12 @@ async function handleInfo(
       { name: 'Channel', value: `<#${mapping.channel_id}>`, inline: true },
       {
         name: 'Created',
-        value: `<t:${Math.floor(mapping.created_at.getTime() / 1000)}:R>`,
+        value: `<t:${createdTimestamp}:R>`,
         inline: true,
       },
       {
         name: 'Last Updated',
-        value: `<t:${Math.floor(mapping.updated_at.getTime() / 1000)}:R>`,
+        value: `<t:${updatedTimestamp}:R>`,
         inline: true,
       }
     )

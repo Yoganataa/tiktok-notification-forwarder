@@ -3,6 +3,25 @@ import { PoolClient } from 'pg';
 import { BaseRepository } from './base.repository';
 import { SystemConfig } from '../core/types/database.types';
 
+/**
+ * Helper to ensure dates are real JS Date objects.
+ */
+function normalizeDate(date: string | number | Date): Date {
+  if (date instanceof Date) return date;
+  return new Date(date);
+}
+
+/**
+ * Helper to map raw DB row to SystemConfig object.
+ */
+function mapRowToSystemConfig(row: any): SystemConfig {
+  return {
+    key: row.key,
+    value: row.value,
+    updated_at: normalizeDate(row.updated_at),
+  };
+}
+
 export class SystemConfigRepository extends BaseRepository {
   async get(key: string, client?: PoolClient): Promise<string | null> {
     const sql = `
@@ -16,7 +35,6 @@ export class SystemConfigRepository extends BaseRepository {
   }
 
   async set(key: string, value: string, client?: PoolClient): Promise<void> {
-    // FIX: Ubah NOW() menjadi CURRENT_TIMESTAMP
     const sql = `
       INSERT INTO system_config (key, value, updated_at)
       VALUES ($1, $2, CURRENT_TIMESTAMP)
@@ -37,6 +55,7 @@ export class SystemConfigRepository extends BaseRepository {
 
   async findAll(client?: PoolClient): Promise<SystemConfig[]> {
     const sql = `SELECT * FROM system_config ORDER BY key ASC`;
-    return this.queryMany<SystemConfig>(sql, [], client);
+    const results = await this.queryMany<any>(sql, [], client);
+    return results.map(mapRowToSystemConfig);
   }
 }

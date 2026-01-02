@@ -1,7 +1,7 @@
 // src/utils/logger.ts
 import winston from 'winston';
 import { configManager } from '../core/config/config';
-import { LOG_CONFIG } from '../constants';
+import { LOG_CONFIG, APP_VERSION } from '../constants';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -62,7 +62,7 @@ function createLogger() {
     defaultMeta: {
       service: 'tiktok-forwarder-bot',
       environment: config.app.nodeEnv,
-      version: '2.0.0',
+      version: APP_VERSION,
     },
     transports: [
       new winston.transports.Console({
