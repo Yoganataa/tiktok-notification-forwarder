@@ -7,6 +7,7 @@ import { SystemConfigRepository } from '../../repositories/system-config.reposit
 dotenv.config();
 
 export type DatabaseDriver = 'postgres' | 'sqlite';
+export type DownloaderEngine = 'btch' | 'tobyg74';
 
 /**
  * Interface defining the application's configuration structure.
@@ -21,10 +22,16 @@ export interface AppConfig {
   bot: {
     sourceBotIds: string[];
     fallbackChannelId: string;
+    // Feature Toggle for Downloader
+    enableDownloader: boolean;
+    // Engine Selection
+    downloaderEngine: DownloaderEngine;
+    // TikTok Cookie for advanced features
+    tiktokCookie: string;
   };
   database: {
     driver: DatabaseDriver;
-    url: string; // Connection string for PG, or File Path for SQLite
+    url: string; 
     maxConnections: number;
     minConnections: number;
     ssl: boolean;
@@ -48,7 +55,6 @@ class ConfigManager {
       throw new ValidationError(`Missing required env vars: ${missing.join(', ')}`);
     }
 
-    // Determine driver based on ENV or URL prefix
     let driver: DatabaseDriver = 'postgres';
     if (process.env.DB_DRIVER === 'sqlite' || process.env.DATABASE_URL!.startsWith('sqlite')) {
       driver = 'sqlite';
@@ -64,6 +70,10 @@ class ConfigManager {
       bot: {
         sourceBotIds: this.parseList(process.env.SOURCE_BOT_IDS || ''),
         fallbackChannelId: process.env.FALLBACK_CHANNEL_ID || '0',
+        enableDownloader: process.env.TT_DL === 'true', 
+        // Default to 'btch' if not set
+        downloaderEngine: (process.env.DOWNLOADER_ENGINE as DownloaderEngine) || 'btch',
+        tiktokCookie: process.env.TIKTOK_COOKIE || '',
       },
       database: {
         driver: driver,
@@ -120,6 +130,20 @@ class ConfigManager {
             this.config!.database.minConnections = parseInt(value); 
             updatesCount++; 
             break;
+          case 'TT_DL': 
+            this.config!.bot.enableDownloader = value === 'true';
+            updatesCount++;
+            break;
+          case 'DOWNLOADER_ENGINE':
+            if (value === 'btch' || value === 'tobyg74') {
+                this.config!.bot.downloaderEngine = value;
+                updatesCount++;
+            }
+            break;
+          case 'TIKTOK_COOKIE': // Optional: Allow overriding cookie from DB
+            this.config!.bot.tiktokCookie = value;
+            updatesCount++;
+            break;
         }
       }
 
@@ -140,7 +164,10 @@ class ConfigManager {
       'FALLBACK_CHANNEL_ID': config.bot.fallbackChannelId,
       'CORE_SERVER_ID': config.discord.coreServerId,
       'DB_MAX_CONNECTIONS': config.database.maxConnections.toString(),
-      'DB_MIN_CONNECTIONS': config.database.minConnections.toString()
+      'DB_MIN_CONNECTIONS': config.database.minConnections.toString(),
+      'TT_DL': config.bot.enableDownloader ? 'true' : 'false',
+      'DOWNLOADER_ENGINE': config.bot.downloaderEngine,
+      'TIKTOK_COOKIE': config.bot.tiktokCookie // Seed Cookie
     };
 
     try {

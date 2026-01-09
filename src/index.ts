@@ -4,14 +4,17 @@ import { database } from './core/database/connection';
 import { configManager } from './core/config/config';
 import { logger } from './utils/logger';
 import { handleInteractionError } from './utils/error-handler';
-import { commandList } from './commands';
+// UPDATE: Import getCommandList (function), bukan commandList (array)
+import { getCommandList } from './commands';
 import { APP_VERSION } from './constants';
 
 // Controllers
 import { handleMappingCommand } from './commands/mapping.command';
 import { handleMenuCommand } from './commands/menu.command';
 import { handleAdminCommand } from './commands/admin.command';
-import { AdminController } from './controllers/admin.controller';
+// UPDATE: Import path folder admin (index.ts)
+import { AdminController } from './controllers/admin';
+import { handleTiktokCommand } from './commands/tiktok.command';
 
 // Services & Repositories
 import { UserMappingRepository } from './repositories/user-mapping.repository';
@@ -21,6 +24,7 @@ import { PermissionService } from './services/permission.service';
 import { NotificationService } from './services/notification.service';
 import { ForwarderService } from './services/forwarder.service';
 import { MigrationService } from './services/migration.service';
+import { TiktokDownloadService } from './services/tiktok-download.service'; 
 
 /**
  * Main Application Class.
@@ -63,7 +67,10 @@ class Application {
 
     this.permissionService = new PermissionService(accessControlRepo);
     const notificationService = new NotificationService(userMappingRepo);
-    this.forwarderService = new ForwarderService(notificationService);
+    const tiktokDownloadService = new TiktokDownloadService(); 
+
+    // Inject TiktokDownloadService into ForwarderService
+    this.forwarderService = new ForwarderService(notificationService, tiktokDownloadService);
 
     this.adminController = new AdminController(
       this.permissionService,
@@ -135,6 +142,11 @@ class Application {
     try {
       await configManager.loadFromDatabase(this.systemConfigRepo);
       this.config = configManager.get();
+
+      // Hot-reload commands to reflect cookie changes (hide/show advanced commands)
+      if (this.client.isReady()) {
+        await this.registerCommands();
+      }
     } catch (error) {
       logger.error('Failed to synchronize dynamic configuration', { 
         error: (error as Error).message 
@@ -194,6 +206,7 @@ class Application {
       case 'mapping': await handleMappingCommand(interaction, this.permissionService); break;
       case 'menu': await handleMenuCommand(interaction, this.permissionService); break;
       case 'admin': await handleAdminCommand(interaction, this.permissionService); break;
+      case 'tiktok': await handleTiktokCommand(interaction); break;
     }
   }
 
@@ -205,7 +218,10 @@ class Application {
   private async registerCommands(): Promise<void> {
     try {
       const rest = new REST({ version: '10' }).setToken(this.config.discord.token);
-      const commandsBody = commandList.map((cmd) => cmd.toJSON());
+      
+      // UPDATE: Panggil getCommandList() untuk mendapatkan array command yang dinamis
+      // Jika cookie kosong, getCommandList akan mengembalikan struktur command yang terbatas
+      const commandsBody = getCommandList().map((cmd) => cmd.toJSON());
 
       logger.info('Updating global slash commands...', { count: commandsBody.length });
       await rest.put(Routes.applicationCommands(this.config.discord.clientId), { body: commandsBody });

@@ -298,7 +298,7 @@ export class NotificationService {
     switch (type) {
       case 'live':
         return {
-          statusText: '🔴 Live Now',
+          statusText: '🔴 Now Live',
           actionText: 'Watch Stream',
           color: EMBED_COLORS.TIKTOK,
         };
