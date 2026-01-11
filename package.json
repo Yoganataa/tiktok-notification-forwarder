@@ -2,10 +2,10 @@
   "name": "tiktok-notification-forwarder",
   "version": "2.1.0",
   "description": "Production-ready Discord bot to forward TikTok notifications",
-  "main": "dist/index.js",
+  "main": "dist/main.js",
   "scripts": {
-    "build": "tsc && cp -r src/core/database/migrations dist/core/database/",
-    "start": "node dist/index.js",
+    "build": "tsc && cp -r src/infra/database/migrations dist/infra/database/",
+    "start": "node dist/main.js",
     "dev": "nodemon",
     "lint": "eslint src/**/*.ts",
     "type-check": "tsc --noEmit"
@@ -20,6 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "@tobyg74/tiktok-api-dl": "^1.3.7",
+    "@types/uuid": "^10.0.0",
     "@yoganataa/tstok": "github:Yoganataa/tiktok-live-recorder-ts#v2.0.0",
     "better-sqlite3": "^12.5.0",
     "btch-downloader": "^6.0.25",
@@ -27,6 +28,7 @@
     "dotenv": "^17.2.3",
     "node-cache": "^5.1.2",
     "pg": "^8.16.3",
+    "uuid": "^13.0.0",
     "winston": "^3.19.0"
   },
   "devDependencies": {

@@ -1,0 +1,318 @@
+// src/modules/tiktok/interface/tiktok.discord.adapter.ts
+import { 
+    SlashCommandBuilder, 
+    ChatInputCommandInteraction, 
+    EmbedBuilder,
+    AttachmentBuilder
+} from 'discord.js';
+import { TiktokDownloadService } from '../application/tiktok.service';
+import { EMBED_COLORS } from '../../../shared/constants';
+import { logger } from '../../../infra/logger';
+import { configManager } from '../../../infra/config/config';
+import { getStandardFooter } from '../../../interfaces/discord/shared/utils/discord.helpers';
+
+// NOTE: Service should be injected in real app, but for adapter factory it's okay to accept it or wire it in main.
+// For now, we will assume we get the service passed or we construct this as a handler class.
+// But to keep it functionally similar to previous "command" file:
+
+export function getTiktokCommand() {
+    const config = configManager.get();
+    const hasCookie = !!config.bot.tiktokCookie && config.bot.tiktokCookie.length > 0;
+
+    const cmd = new SlashCommandBuilder()
+        .setName('tiktok')
+        .setDescription('TikTok Utility Tools')
+        .addSubcommand(sub =>
+            sub.setName('dl')
+               .setDescription('Download video/slide/music from URL')
+               .addStringOption(opt => opt.setName('url').setDescription('TikTok URL').setRequired(true))
+        );
+
+    if (hasCookie) {
+        cmd
+        .addSubcommand(sub => 
+            sub.setName('stalk')
+               .setDescription('Stalk User Profile')
+               .addStringOption(opt => opt.setName('username').setDescription('Username (no @)').setRequired(true))
+        )
+        .addSubcommand(sub => 
+            sub.setName('search')
+               .setDescription('Search TikTok')
+               .addStringOption(opt => opt.setName('query').setDescription('Keyword').setRequired(true))
+               .addStringOption(opt => 
+                   opt.setName('type').setDescription('Type').setRequired(true)
+                      .addChoices({ name: 'User', value: 'user' }, { name: 'Video', value: 'video' }, { name: 'Live', value: 'live' })
+               )
+        )
+        .addSubcommand(sub =>
+            sub.setName('comments')
+               .setDescription('Get Video Comments')
+               .addStringOption(opt => opt.setName('url').setDescription('Video URL').setRequired(true))
+        )
+        .addSubcommand(sub =>
+            sub.setName('feed')
+               .setDescription('Get User Posts/Reposts/Liked')
+               .addStringOption(opt => opt.setName('username').setDescription('Username').setRequired(true))
+               .addStringOption(opt => 
+                    opt.setName('type').setDescription('Type').setRequired(true)
+                       .addChoices({ name: 'Posts', value: 'posts' }, { name: 'Reposts', value: 'reposts' }, { name: 'Liked', value: 'liked' })
+               )
+        )
+        .addSubcommand(sub =>
+            sub.setName('list')
+               .setDescription('Get Collection or Playlist')
+               .addStringOption(opt => opt.setName('url').setDescription('Collection/Playlist URL or ID').setRequired(true))
+               .addStringOption(opt => 
+                    opt.setName('type').setDescription('Type').setRequired(true)
+                       .addChoices({ name: 'Collection', value: 'collection' }, { name: 'Playlist', value: 'playlist' })
+               )
+        )
+        .addSubcommand(sub =>
+            sub.setName('trending')
+               .setDescription('Get Trending Content/Creators')
+               .addStringOption(opt => 
+                    opt.setName('type').setDescription('Type').setRequired(true)
+                       .addChoices({ name: 'Content', value: 'content' }, { name: 'Creators', value: 'creators' })
+               )
+        )
+        .addSubcommand(sub =>
+            sub.setName('music')
+               .setDescription('Music Tools')
+               .addStringOption(opt => opt.setName('url').setDescription('Music ID or URL').setRequired(true))
+               .addStringOption(opt => 
+                    opt.setName('action').setDescription('Action').setRequired(true)
+                       .addChoices({ name: 'Detail', value: 'detail' }, { name: 'Get Videos', value: 'videos' })
+               )
+        );
+    }
+
+    return cmd;
+}
+
+export async function handleTiktokAdapter(
+    interaction: ChatInputCommandInteraction,
+    tiktokService: TiktokDownloadService
+): Promise<void> {
+    const subcommand = interaction.options.getSubcommand();
+    
+    configManager.load(); // Ensure config is loaded
+    const config = configManager.get();
+    const hasCookie = !!config.bot.tiktokCookie;
+    
+    if (subcommand !== 'dl' && !hasCookie) {
+        await interaction.reply({ content: '❌ This command requires **TIKTOK_COOKIE** to be configured in settings.', ephemeral: true });
+        return;
+    }
+
+    await interaction.deferReply();
+
+    try {
+        switch (subcommand) {
+            case 'dl': await handleDownload(interaction, tiktokService); break;
+            case 'stalk': await handleStalk(interaction, tiktokService); break;
+            case 'search': await handleSearch(interaction, tiktokService); break;
+            case 'comments': await handleComments(interaction, tiktokService); break;
+            case 'feed': await handleFeed(interaction, tiktokService); break;
+            case 'list': await handleList(interaction, tiktokService); break;
+            case 'trending': await handleTrending(interaction, tiktokService); break;
+            case 'music': await handleMusic(interaction, tiktokService); break;
+        }
+    } catch (error) {
+        logger.error(`TikTok cmd error [${subcommand}]`, { error: (error as Error).message });
+        await interaction.editReply({ content: `❌ Error: ${(error as Error).message}` });
+    }
+}
+
+async function handleDownload(interaction: ChatInputCommandInteraction, service: TiktokDownloadService): Promise<void> {
+    const url = interaction.options.getString('url', true);
+    const media = await service.download(url);
+
+    if (!media) {
+        await interaction.editReply('❌ Failed to download content.');
+        return;
+    }
+
+    const files = media.type === 'video' 
+        ? [new AttachmentBuilder(media.urls[0], { name: 'video.mp4' })] 
+        : media.urls.slice(0, 10).map((u, i) => new AttachmentBuilder(u, { name: `img_${i}.jpg` }));
+
+    const embed = new EmbedBuilder().setColor(EMBED_COLORS.TIKTOK)
+        .setTitle('📥 Download Success').setDescription(media.description || 'No Desc')
+        .setAuthor({ name: media.author || 'Unknown' })
+        .setFooter(getStandardFooter(`Req: ${interaction.user.tag}`));
+
+    try {
+        await interaction.editReply({ content: `✅ Source: <${url}>`, embeds: [embed], files });
+    } catch (e) {
+        await interaction.editReply({ content: `⚠️ File too large.\nLink: ${media.urls[0]}`, embeds: [embed] });
+    }
+}
+
+async function handleStalk(interaction: ChatInputCommandInteraction, service: TiktokDownloadService): Promise<void> {
+    const username = interaction.options.getString('username', true);
+    const data = await service.stalkUser(username);
+    if (!data) {
+        await interaction.editReply('❌ User not found.');
+        return;
+    }
+
+    const embed = new EmbedBuilder().setColor(EMBED_COLORS.TIKTOK)
+        .setTitle(`👤 @${data.username} (${data.nickname})`)
+        .setThumbnail(data.avatar).setDescription(data.signature || 'No Bio')
+        .addFields(
+            { name: 'Followers', value: String(data.followers), inline: true },
+            { name: 'Likes', value: String(data.likes), inline: true },
+            { name: 'Videos', value: String(data.videoCount), inline: true }
+        )
+        .setFooter(getStandardFooter());
+
+    await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleSearch(interaction: ChatInputCommandInteraction, service: TiktokDownloadService): Promise<void> {
+    const query = interaction.options.getString('query', true);
+    const type = interaction.options.getString('type', true) as any;
+    const results = await service.search(query, type);
+
+    if (!results.length) {
+        await interaction.editReply('❌ No results.');
+        return;
+    }
+
+    const embed = new EmbedBuilder().setColor(EMBED_COLORS.TIKTOK)
+        .setTitle(`🔍 Search: ${query} (${type})`)
+        .setFooter(getStandardFooter());
+
+    results.slice(0, 5).forEach((item: any, i) => {
+        if (type === 'user') {
+            embed.addFields({ name: `${i+1}. ${item.nickname}`, value: `@${item.username} | ${item.followerCount} Fans` });
+        } else if (type === 'video') {
+            embed.addFields({ name: `${i+1}. Video`, value: `By: ${item.author?.nickname}\nDesc: ${item.desc?.substring(0,50)}` });
+        } else {
+            embed.addFields({ name: `${i+1}. Live`, value: `Host: ${item.owner?.nickname}\nTitle: ${item.title}` });
+        }
+    });
+    await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleComments(interaction: ChatInputCommandInteraction, service: TiktokDownloadService): Promise<void> {
+    const url = interaction.options.getString('url', true);
+    const comments = await service.getVideoComments(url);
+    if (!comments.length) {
+        await interaction.editReply('❌ No comments found.');
+        return;
+    }
+
+    const embed = new EmbedBuilder().setColor(EMBED_COLORS.INFO).setTitle('💬 Comments')
+        .setFooter(getStandardFooter());
+
+    comments.slice(0, 10).forEach((c: any) => {
+        embed.addFields({ name: c.user?.nickname || 'Anon', value: c.text?.substring(0, 100) || '-' });
+    });
+    await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleFeed(interaction: ChatInputCommandInteraction, service: TiktokDownloadService): Promise<void> {
+    const username = interaction.options.getString('username', true);
+    const type = interaction.options.getString('type', true);
+    let data: any[] = [];
+
+    if (type === 'posts') data = await service.getUserPosts(username);
+    else if (type === 'reposts') data = await service.getUserReposts(username);
+    else data = await service.getUserLiked(username);
+
+    if (!data.length) {
+        await interaction.editReply(`❌ No ${type} found (Private/Empty).`);
+        return;
+    }
+
+    const embed = new EmbedBuilder().setColor(EMBED_COLORS.TIKTOK).setTitle(`📱 User ${type}: ${username}`)
+        .setFooter(getStandardFooter());
+
+    data.slice(0, 5).forEach((item: any, i) => {
+        embed.addFields({ name: `${i+1}. ${item.desc?.substring(0,50) || 'No Desc'}`, value: `👁️ ${item.stats?.playCount || 0} | ❤️ ${item.stats?.likeCount || 0}` });
+    });
+    await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleList(interaction: ChatInputCommandInteraction, service: TiktokDownloadService): Promise<void> {
+    const url = interaction.options.getString('url', true);
+    const type = interaction.options.getString('type', true);
+    const data = type === 'collection' ? await service.getCollection(url) : await service.getPlaylist(url);
+
+    if (!data.length) {
+        await interaction.editReply('❌ Not found or empty.');
+        return;
+    }
+
+    const embed = new EmbedBuilder().setColor(EMBED_COLORS.INFO).setTitle(`📂 ${type.toUpperCase()}`)
+        .setFooter(getStandardFooter());
+
+    data.slice(0, 5).forEach((item: any, i) => {
+        embed.addFields({ name: `${i+1}. ${item.desc?.substring(0,50)}`, value: `ID: ${item.id}` });
+    });
+    await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleTrending(interaction: ChatInputCommandInteraction, service: TiktokDownloadService): Promise<void> {
+    const type = interaction.options.getString('type', true) as 'content' | 'creators';
+    const data = await service.getTrending(type);
+
+    if (!data.length) {
+        await interaction.editReply('❌ Failed to fetch trending.');
+        return;
+    }
+
+    const embed = new EmbedBuilder().setColor(EMBED_COLORS.TIKTOK).setTitle(`🔥 Trending ${type}`)
+        .setFooter(getStandardFooter());
+
+    data.slice(0, 5).forEach((item: any, i) => {
+        if (type === 'content') {
+            const card = item.cardItem;
+            embed.addFields({ name: `${i+1}. ${card.title || 'Video'}`, value: `By: ${card.extraInfo?.userId}` });
+        } else {
+            embed.addFields({ name: `${i+1}. ${item.nickname}`, value: `@${item.username} | ${item.followerCount} Fans` });
+        }
+    });
+    await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleMusic(interaction: ChatInputCommandInteraction, service: TiktokDownloadService): Promise<void> {
+    const url = interaction.options.getString('url', true);
+    const action = interaction.options.getString('action', true);
+
+    if (action === 'detail') {
+        const data = await service.getMusicDetail(url);
+        if (!data) {
+            await interaction.editReply('❌ Music details not found.');
+            return;
+        }
+        
+        const info = data.musicInfo;
+        const embed = new EmbedBuilder().setColor(EMBED_COLORS.SUCCESS)
+            .setTitle(`🎵 ${info.music?.title}`)
+            .setThumbnail(info.music?.coverMedium)
+            .addFields(
+                { name: 'Author', value: info.music?.authorName || '-', inline: true },
+                { name: 'Duration', value: String(info.music?.duration), inline: true },
+                { name: 'Used By', value: `${info.stats?.videoCount} videos`, inline: true }
+            )
+            .setFooter(getStandardFooter());
+
+        await interaction.editReply({ embeds: [embed] });
+    } else {
+        const data = await service.getMusicVideos(url);
+        if (!data || !data.videos) {
+            await interaction.editReply('❌ No videos found for this music.');
+            return;
+        }
+
+        const embed = new EmbedBuilder().setColor(EMBED_COLORS.SUCCESS).setTitle('🎵 Videos using this Sound')
+            .setFooter(getStandardFooter());
+
+        data.videos.slice(0, 5).forEach((v: any, i: number) => {
+            embed.addFields({ name: `${i+1}. ${v.author?.nickname}`, value: v.desc?.substring(0,50) || 'Video' });
+        });
+        await interaction.editReply({ embeds: [embed] });
+    }
+}

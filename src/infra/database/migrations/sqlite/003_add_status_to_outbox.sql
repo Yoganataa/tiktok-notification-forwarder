@@ -1,0 +1,2 @@
+ALTER TABLE outbox_events ADD COLUMN status TEXT DEFAULT 'PENDING';
+ALTER TABLE outbox_events ADD COLUMN locked_at DATETIME;
