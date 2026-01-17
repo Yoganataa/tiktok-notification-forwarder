@@ -79,6 +79,10 @@ export class Application {
     const accessRepo = new AccessControlRepository();
 
     const config = configManager.get();
+
+    // VERBOSE LOG: Bootstrapping
+    logger.debug('Bootstrapping Application...', { config: config }); // Redacted by Logger
+
     const mappingRepo = config.database.driver === 'sqlite'
         ? new SqliteUserMappingRepository()
         : new PostgresUserMappingRepository();
@@ -94,12 +98,10 @@ export class Application {
     const discordHandler = new SendDiscordNotificationHandler(notifierAdapter);
 
     // Register Event Handlers
-    // Ensure we don't register duplicates if bootstrap is called multiple times (though it shouldn't be)
     eventBus.register(TikTokVideoForwardedEvent.name, discordHandler);
 
     // Initialize Outbox Processor
     this.outboxProcessor = new OutboxProcessor(outboxRepo, eventBus);
-    // Start Outbox (non-blocking)
     this.outboxProcessor.start();
 
     // 3. Application Services
@@ -147,7 +149,6 @@ export class Application {
     this.commandDispatcher.registerSlash('menu', (i) => adminController.handle(i));
 
     // Register Components (Prefixes)
-    // "nav:", "admin_", "set", "toggle_autodl" are used by AdminController
     this.commandDispatcher.registerComponentPrefix('nav', (i) => adminController.handle(i as any));
     this.commandDispatcher.registerComponentPrefix('admin_', (i) => adminController.handle(i as any));
     this.commandDispatcher.registerComponentPrefix('set', (i) => adminController.handle(i as any));
@@ -247,10 +248,6 @@ export class Application {
         // --- NEW: Detect Server Context for Attribution ---
         let sourceGuildName: string | undefined = undefined;
         if (message.guild) {
-             // If this bot is in another server, we capture that server's name.
-             // We can check against Core ID, but just passing the name is safer/simpler for now.
-             // If it's the Core Server, the notifier will still append "From Server: X" if we pass it,
-             // but usually we want to skip it if it's the main server.
              if (message.guild.id !== config.discord.coreServerId) {
                  sourceGuildName = message.guild.name;
              }
@@ -269,6 +266,18 @@ export class Application {
 
     // Optimized Interaction Listener
     client.on(Events.InteractionCreate, async (interaction) => {
+        // VERBOSE LOG: Incoming interaction
+        if (interaction.isChatInputCommand()) {
+             logger.debug(`Slash Command Interaction: ${interaction.commandName}`, {
+                 user: interaction.user.tag,
+                 guild: interaction.guildId
+             });
+        } else if (interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) {
+             logger.debug(`Component Interaction: ${interaction.customId}`, {
+                 user: interaction.user.tag,
+                 guild: interaction.guildId
+             });
+        }
         await this.commandDispatcher.dispatch(interaction);
     });
   }
