@@ -9,6 +9,7 @@ dotenv.config();
 
 export type DatabaseDriver = 'postgres' | 'sqlite';
 export type DownloaderEngine = 'btch' | 'tobyg74' | 'liber' | 'tikwm' | 'douyin' | 'musicaldown' | 'tiktokv2';
+export type LogStrategy = 'safe' | 'balance' | 'aggressive';
 
 export interface AppConfig {
   discord: {
@@ -34,7 +35,8 @@ export interface AppConfig {
   };
   app: {
     nodeEnv: 'development' | 'production' | 'test';
-    logLevel: string;
+    logLevel: string;     // Kept for backward compatibility or manual override
+    logStrategy: LogStrategy; // New config
   };
 }
 
@@ -55,6 +57,13 @@ export class ConfigManager {
     if (process.env.DB_DRIVER === 'sqlite' || process.env.DATABASE_URL!.startsWith('sqlite')) {
       driver = 'sqlite';
     }
+
+    // Determine Strategy (Default: safe)
+    // safe -> info, balance -> debug, aggressive -> verbose/silly
+    const rawStrategy = (process.env.LOG_STRATEGY || 'safe').toLowerCase();
+    const strategy: LogStrategy = ['safe', 'balance', 'aggressive'].includes(rawStrategy)
+        ? (rawStrategy as LogStrategy)
+        : 'safe';
 
     this.config = {
       discord: {
@@ -81,6 +90,7 @@ export class ConfigManager {
       app: {
         nodeEnv: (process.env.NODE_ENV as any) || 'development',
         logLevel: process.env.LOG_LEVEL || 'info',
+        logStrategy: strategy,
       },
     };
 

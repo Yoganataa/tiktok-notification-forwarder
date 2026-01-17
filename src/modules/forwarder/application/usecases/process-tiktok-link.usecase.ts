@@ -27,9 +27,11 @@ export class ProcessTiktokLinkUseCase {
         this.logger.warn('Failed to download media or extract author.');
         return false;
     }
+    this.logger.debug(`Media downloaded successfully`, { author: media.author, type: media.type });
 
     // 2. Get Mapping (Find Existing OR Provision New)
     let mappings = await this.provisioningUseCase.execute(media.author);
+    this.logger.debug(`Provisioning result`, { count: mappings.length });
 
     // --- FALLBACK LOGIC ---
     if (mappings.length === 0) {
@@ -37,7 +39,6 @@ export class ProcessTiktokLinkUseCase {
         if (fallbackId && fallbackId !== '0') {
             this.logger.info(`No specific mapping found for @${media.author}. Using Fallback Channel: ${fallbackId}`);
             // Create a valid UserMapping object
-            // We use the author name as the username, and the fallback channel ID.
             const fallbackMapping = UserMapping.create(
                 TikTokUsername.create(media.author),
                 DiscordChannelId.create(fallbackId),

@@ -1,6 +1,6 @@
 // src/infra/logger/index.ts
 import winston from 'winston';
-import { configManager } from '../config/config';
+import { configManager, LogStrategy } from '../config/config';
 import { LOG_CONFIG, APP_VERSION } from '../../shared/constants';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -28,7 +28,7 @@ function redactObject(obj: any): any {
                 newObj[key] = redactObject(obj[key]);
             }
         }
-        // Copy Symbols (important for Winston internals)
+        // Copy Symbols
         const symbols = Object.getOwnPropertySymbols(obj);
         for (const sym of symbols) {
             newObj[sym] = obj[sym];
@@ -38,22 +38,14 @@ function redactObject(obj: any): any {
     return obj;
 }
 
-/**
- * Winston Formatter that acts as a middleware to scrub secrets.
- */
 const redactSecrets = winston.format((info) => {
     return redactObject(info);
 });
 
 // ------------------------------
 
-/**
- * Custom log format for development environments.
- * * Features colorized output and human-readable timestamps.
- * * serializes metadata objects for easier debugging in the console.
- */
 const developmentFormat = winston.format.combine(
-  redactSecrets(), // <--- Apply Redaction
+  redactSecrets(),
   winston.format.colorize(),
   winston.format.timestamp({ format: LOG_CONFIG.DATE_FORMAT }),
   winston.format.printf(({ timestamp, level, message, ...meta }) => {
@@ -68,37 +60,56 @@ const developmentFormat = winston.format.combine(
   })
 );
 
-/**
- * Standardized log format for production environments.
- * * Uses structured JSON formatting for easy ingestion by log aggregation tools (e.g., ELK Stack).
- * * Includes full stack traces for error-level logs.
- */
 const productionFormat = winston.format.combine(
-  redactSecrets(), // <--- Apply Redaction
+  redactSecrets(),
   winston.format.timestamp({ format: LOG_CONFIG.DATE_FORMAT }),
   winston.format.errors({ stack: true }),
   winston.format.json()
 );
 
-/**
- * Factory function to instantiate the Winston logger.
- */
 function createLogger() {
   let config;
   try {
     config = configManager.get();
   } catch {
-    // Fallback configuration for boot-time logging before ConfigManager is ready
     config = { 
       app: { 
         nodeEnv: process.env.NODE_ENV || 'development', 
-        logLevel: process.env.LOG_LEVEL || 'debug' // Default to verbose (debug) if missing
+        logLevel: process.env.LOG_LEVEL,
+        logStrategy: (process.env.LOG_STRATEGY as LogStrategy) || 'safe'
       } 
     };
   }
 
-  // Force debug level if requested by user for "verbose all logs"
-  const logLevel = process.env.LOG_LEVEL || 'debug';
+  // Strategy Mapping
+  // safe       -> info
+  // balance    -> debug
+  // aggressive -> verbose (Note: winston default levels: error, warn, info, http, verbose, debug, silly)
+  // Wait, default winston npm levels: error: 0, warn: 1, info: 2, http: 3, verbose: 4, debug: 5, silly: 6
+  // User wants aggressive -> "see EVERYTHING" -> silly or debug.
+  // User wants balance -> "standard debug" -> verbose/debug?
+  // User wants safe -> "no clutter" -> info.
+
+  let logLevel = 'info';
+  const strategy = config.app.logStrategy;
+
+  switch (strategy) {
+      case 'aggressive':
+          logLevel = 'silly'; // Maximum verbosity
+          break;
+      case 'balance':
+          logLevel = 'debug'; // Standard debug
+          break;
+      case 'safe':
+      default:
+          logLevel = 'info';
+          break;
+  }
+
+  // Allow manual override via env if specific granularity needed
+  if (config.app.logLevel) {
+      logLevel = config.app.logLevel;
+  }
 
   const logFormat =
     config.app.nodeEnv === 'production'
@@ -112,6 +123,7 @@ function createLogger() {
       service: 'tiktok-forwarder-bot',
       environment: config.app.nodeEnv,
       version: APP_VERSION,
+      strategy: strategy
     },
     transports: [
       new winston.transports.Console({
@@ -135,7 +147,4 @@ function createLogger() {
   });
 }
 
-/**
- * Global singleton logger instance.
- */
 export const logger = createLogger();

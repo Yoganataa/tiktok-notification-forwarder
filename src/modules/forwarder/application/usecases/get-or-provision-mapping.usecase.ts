@@ -17,34 +17,33 @@ export class GetOrProvisionMappingUseCase {
     const usernameVO = TikTokUsername.create(tiktokUser);
 
     // 1. Check if mapping already exists
-    // Use transaction for consistent read
     const existingMappings = await withTransaction(async (tx) => {
         return await this.mappingRepo.findByUsername(usernameVO, tx);
     });
 
     if (existingMappings.length > 0) {
+        logger.debug(`Found existing mapping(s) for @${tiktokUser}`, { count: existingMappings.length });
         return existingMappings;
     }
 
     // 2. If not exists, proceed to Provisioning (Auto-Create)
     logger.info(`No mapping found for @${tiktokUser}. Provisioning new channel...`);
 
-    // BUSINESS LOGIC: Sanitize channel name (Letters only, lowercase, no numbers/symbols)
-    // Example: "User_Name.123" -> "username"
+    // BUSINESS LOGIC: Sanitize channel name
     const channelName = tiktokUser.replace(/[^a-zA-Z]/g, '').toLowerCase();
 
     if (channelName.length < 2) {
         logger.warn(`Cannot auto-create channel. Username '${tiktokUser}' results in invalid channel name '${channelName}'.`);
-        return []; // Cancel if channel name becomes invalid/empty
+        return [];
     }
 
-    // 3. Call External API (Discord) - Done OUTSIDE DB transaction
-    // Because we cannot rollback Discord channel creation if DB fails.
+    // 3. Call External API (Discord)
     let newChannelId: string;
     try {
         newChannelId = await this.channelManager.createChannel(channelName);
+        logger.debug(`Channel created via adapter`, { channelName, newChannelId });
     } catch (error) {
-        // If channel creation fails, stop process
+        logger.error(`Failed to provision channel for @${tiktokUser}`, { error: (error as Error).message });
         return [];
     }
 
@@ -52,7 +51,7 @@ export class GetOrProvisionMappingUseCase {
     const newMapping = UserMapping.create(
         usernameVO,
         DiscordChannelId.create(newChannelId),
-        null // No default role tag
+        null
     );
 
     await withTransaction(async (tx) => {

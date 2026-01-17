@@ -81,7 +81,7 @@ export class Application {
     const config = configManager.get();
 
     // VERBOSE LOG: Bootstrapping
-    logger.debug('Bootstrapping Application...', { config: config }); // Redacted by Logger
+    logger.debug('Bootstrapping Application...', { config: config });
 
     const mappingRepo = config.database.driver === 'sqlite'
         ? new SqliteUserMappingRepository()
@@ -159,6 +159,7 @@ export class Application {
     try {
       const config = configManager.load();
       logger.info(`🚀 Starting TikTok Notification Forwarder Bot v${APP_VERSION}...`);
+      logger.info(`📝 Logging Strategy: ${config.app.logStrategy.toUpperCase()}`);
 
       // Database
       await database.connect({
@@ -235,14 +236,31 @@ export class Application {
 
     // Optimized Message Listener
     client.on(Events.MessageCreate, async (message) => {
+      // AGGRESSIVE LOG: Log every message receipt
+      logger.silly(`[AGGRESSIVE] Message Received`, {
+          id: message.id,
+          author: message.author.tag,
+          guild: message.guild?.name || 'DM',
+          content: message.content.substring(0, 50) + '...'
+      });
+
       // 1. Check Source Bot Whitelist
       const config = configManager.get();
       if (message.author.bot) {
-          if (!config.bot.sourceBotIds.includes(message.author.id)) return;
+          if (!config.bot.sourceBotIds.includes(message.author.id)) {
+              logger.silly(`[AGGRESSIVE] Ignored Bot (Not in whitelist)`, { id: message.author.id });
+              return;
+          }
       }
 
       // 2. Extract Links (Optimized)
       const urls = extractTikTokLink(message as Message);
+
+      // AGGRESSIVE LOG: Link detection result
+      logger.silly(`[AGGRESSIVE] Link Extraction Result`, {
+          count: urls.length,
+          urls: urls
+      });
 
       if (urls.length > 0) {
         // --- NEW: Detect Server Context for Attribution ---
@@ -256,11 +274,14 @@ export class Application {
         for (const url of urls) {
              try {
                 // Pass sourceGuildName to Use Case
+                logger.debug(`Processing TikTok Link`, { url, user: message.author.tag });
                 await this.processTiktokLink.execute(url, message.author.tag, sourceGuildName);
              } catch (error) {
                 logger.error('Error processing TikTok URL', { url, error });
              }
         }
+      } else {
+          logger.silly('[AGGRESSIVE] No TikTok links found in message.');
       }
     });
 
