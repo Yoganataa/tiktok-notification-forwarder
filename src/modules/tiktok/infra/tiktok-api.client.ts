@@ -32,6 +32,7 @@ export class TiktokApiClient implements TiktokApiPort {
   private async executeTobyDownloader(url: string, version: TobyVersion): Promise<any | null> {
     try {
         const result = await Downloader(url, { version });
+        logger.debug(`TobyG74 Response (${version})`, { result }); // VERBOSE LOGGING
         if (result.status === 'success' && result.result) {
             return result.result;
         }
@@ -48,6 +49,7 @@ export class TiktokApiClient implements TiktokApiPort {
   async downloadViaBtch(url: string): Promise<DownloadResult | null> {
     try {
         const data = await ttdl(url) as any;
+        logger.debug('BTCH Response', { data }); // VERBOSE LOGGING
         if (!data) return null;
         return this.normalizeBtchResponse(data, 'BTCH');
     } catch (error) {
@@ -63,6 +65,7 @@ export class TiktokApiClient implements TiktokApiPort {
   async downloadViaDouyin(url: string): Promise<DownloadResult | null> {
     try {
         const data = await douyin(url) as any;
+        logger.debug('Douyin Response', { data }); // VERBOSE LOGGING
         if (!data) return null;
         // Douyin response often matches BTCH structure roughly
         return this.normalizeBtchResponse(data, 'Douyin');
@@ -164,7 +167,7 @@ export class TiktokApiClient implements TiktokApiPort {
           if (res.status === 'success' && res.result) return res.result;
           return [] as any; // Default empty
       } catch (e) {
-          // logger.debug('TikTok API SafeCall error', { error: (e as Error).message });
+          logger.debug('TikTok API SafeCall error', { error: (e as Error).message });
           return [] as any;
       }
   }
