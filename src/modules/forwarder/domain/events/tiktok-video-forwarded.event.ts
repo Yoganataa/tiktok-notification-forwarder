@@ -17,6 +17,7 @@ export class TikTokVideoForwardedEvent implements IDomainEvent {
     public readonly mapping: MappingDTO,
     public readonly media: DownloadResult,
     public readonly originalUrl: string,
+    public readonly sourceGuildName?: string, // Added optional source attribution
     id?: string,
     date?: Date
   ) {
@@ -30,6 +31,7 @@ export class TikTokVideoForwardedEvent implements IDomainEvent {
           payload.mapping,
           payload.media,
           payload.originalUrl,
+          payload.sourceGuildName,
           payload.eventId,
           new Date(payload.occurredAt)
       );
@@ -46,7 +48,8 @@ export class TikTokVideoForwardedEvent implements IDomainEvent {
         occurredAt: this.occurredAt,
         mapping: this.mapping,
         media: this.media,
-        originalUrl: this.originalUrl
+        originalUrl: this.originalUrl,
+        sourceGuildName: this.sourceGuildName
       }
     };
   }

@@ -1,17 +1,24 @@
-// src/modules/forwarder/infra/discord-notifier.adapter.ts
+
 import { AttachmentBuilder, EmbedBuilder, TextChannel } from 'discord.js';
 import { NotifierPort } from '../ports/notifier.port';
 import { DownloadResult } from '../../tiktok/domain';
 import { DiscordClientWrapper } from '../../../interfaces/discord/client';
 import { logger } from '../../../infra/logger';
 import { EMBED_COLORS } from '../../../shared/constants';
-// IMPORT HELPER BARU
 import { getStandardFooter } from '../../../interfaces/discord/shared/utils/discord.helpers';
+import { configManager } from '../../../infra/config/config';
 
 export class DiscordNotifierAdapter implements NotifierPort {
   constructor(private clientWrapper: DiscordClientWrapper) {}
 
-  async notify(channelId: string, message: string, media?: DownloadResult, roleIdToTag?: string | null, eventId?: string): Promise<void> {
+  async notify(
+      channelId: string,
+      message: string,
+      media?: DownloadResult,
+      roleIdToTag?: string | null,
+      eventId?: string,
+      sourceGuildName?: string
+  ): Promise<void> {
     const channel = await this.clientWrapper.getChannel(channelId);
     if (!channel || !channel.isSendable()) {
       logger.warn(`Cannot send to channel ${channelId}`);
@@ -36,47 +43,64 @@ export class DiscordNotifierAdapter implements NotifierPort {
         }
     }
 
-    let content = message;
-    if (roleIdToTag) {
-        content = `<@&${roleIdToTag}> ${content}`;
-    }
+    // --- Footer Construction (Attribution) ---
+    const footerExtras: string[] = [];
+    if (sourceGuildName) footerExtras.push(`From Server: ${sourceGuildName}`);
+    if (eventId) footerExtras.push(`Event: ${eventId}`);
+
+    const footerData = getStandardFooter(footerExtras.length > 0 ? footerExtras.join(' | ') : undefined);
 
     const embeds: EmbedBuilder[] = [];
     let files: AttachmentBuilder[] = [];
+    let finalContent = message;
 
-    // GUNAKAN STANDARD FOOTER DENGAN EXTRA TEXT (Event ID)
-    const footerData = getStandardFooter(eventId ? `Event: ${eventId}` : undefined);
-
+    // --- Downloader & Content Logic ---
     if (media) {
-        const embed = new EmbedBuilder()
-            .setColor(EMBED_COLORS.TIKTOK)
-            .setAuthor({ name: media.author || 'TikTok' })
-            .setDescription(media.description || '')
-            .setFooter(footerData) // <--- Updated
-            .setTimestamp();
-        
-        embeds.push(embed);
-
+        // Prepare Media Files
         if (media.type === 'video' && media.urls.length > 0) {
              files.push(new AttachmentBuilder(media.urls[0], { name: 'video.mp4' }));
         } else if (media.type === 'image') {
              files = media.urls.slice(0, 4).map((u, i) => new AttachmentBuilder(u, { name: `image${i}.jpg` }));
         }
-    } else if (eventId) {
-         const embed = new EmbedBuilder()
-            .setDescription('Notification')
-            .setFooter(footerData) // <--- Updated
+
+        // Prepare Embed
+        const embed = new EmbedBuilder()
+            .setColor(EMBED_COLORS.TIKTOK)
+            .setAuthor({
+                name: media.author || 'TikTok',
+                // If downloader is enabled, we might want the original link here instead of raw text
+                url: configManager.get().bot.enableDownloader ? undefined : undefined
+            })
+            .setDescription(media.description || '')
+            .setFooter(footerData)
             .setTimestamp();
-         embeds.push(embed);
+        
+        embeds.push(embed);
+    } else {
+        // No media, simple embed
+        if (eventId) {
+             const embed = new EmbedBuilder()
+                .setDescription('Notification')
+                .setFooter(footerData)
+                .setTimestamp();
+             embeds.push(embed);
+        }
+    }
+
+    // Role Tagging
+    if (roleIdToTag) {
+        finalContent = `<@&${roleIdToTag}> ${finalContent}`;
     }
 
     try {
-        await textChannel.send({ content, embeds, files });
+        await textChannel.send({ content: finalContent, embeds, files });
     } catch (error) {
-        // Fallback if file too large
+        // Fallback if file too large or upload fails
         if (media && media.urls.length > 0) {
+            // Force include link if upload failed
+            const fallbackContent = `${finalContent}\n\n⚠️ Media upload failed (Size/Format):\n${media.urls[0]}`;
             await textChannel.send({ 
-                content: `${content}\n\n⚠️ Media too large to upload directly:\n${media.urls[0]}`,
+                content: fallbackContent,
                 embeds 
             });
         } else {

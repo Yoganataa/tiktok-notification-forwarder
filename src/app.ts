@@ -1,4 +1,3 @@
-
 import { Events, Message } from 'discord.js';
 import { database } from './infra/database/connection';
 import { configManager } from './infra/config/config';
@@ -245,9 +244,22 @@ export class Application {
       const urls = extractTikTokLink(message as Message);
 
       if (urls.length > 0) {
+        // --- NEW: Detect Server Context for Attribution ---
+        let sourceGuildName: string | undefined = undefined;
+        if (message.guild) {
+             // If this bot is in another server, we capture that server's name.
+             // We can check against Core ID, but just passing the name is safer/simpler for now.
+             // If it's the Core Server, the notifier will still append "From Server: X" if we pass it,
+             // but usually we want to skip it if it's the main server.
+             if (message.guild.id !== config.discord.coreServerId) {
+                 sourceGuildName = message.guild.name;
+             }
+        }
+
         for (const url of urls) {
              try {
-                await this.processTiktokLink.execute(url, message.author.tag);
+                // Pass sourceGuildName to Use Case
+                await this.processTiktokLink.execute(url, message.author.tag, sourceGuildName);
              } catch (error) {
                 logger.error('Error processing TikTok URL', { url, error });
              }
