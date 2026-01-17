@@ -107,19 +107,22 @@ npm start
 
 ```
 src/
-├── commands/             # Handler Slash Command
-├── controllers/          # Logika interaksi UI (Button/Modal)
-├── core/
-│   ├── config/           # Config Manager & Loader
-│   ├── database/         # Database Layer
-│   │   ├── migrations/   # SQL Files (Postgres & SQLite separated)
-│   │   ├── connection.ts # Adapter Pattern Logic (Driver Switcher)
-│   │   └── transaction.ts# Abstract Transaction Handler
-│   └── types/            # Type Definitions
-├── repositories/         # Data Access Layer (SQL Queries)
-├── services/             # Business Logic (Notification, Forwarder, Migration)
-└── utils/                # Helper (Logger, Retry, Validation)
-
+├── app.ts                # Application Entry & Bootstrap
+├── main.ts               # Startup Script
+├── infra/                # Infrastructure Layer (DB, Discord, Logger, Config)
+│   ├── config/
+│   ├── database/         # Adapter Pattern & Migrations
+│   ├── discord/          # Command Dispatcher & Client Wrapper
+│   └── logger/
+├── modules/              # Domain Modules (DDD)
+│   ├── admin/            # Admin & Access Control Context
+│   ├── forwarder/        # Notification Forwarding Context (Core)
+│   └── tiktok/           # TikTok Integration Context
+├── shared/               # Shared Kernel
+│   ├── domain/           # Shared Events & Value Objects
+│   ├── infra/            # Outbox & Generic Repositories
+│   └── utils/            # Helper Functions (Regex, Error Handling)
+└── interfaces/           # Shared Interfaces (Discord Command Registry)
 ```
 
 ## 🛠️ Maintenance & Troubleshooting
@@ -161,7 +164,7 @@ npm start
 npm run build
 
 # 2. Start
-pm2 start dist/index.js --name tiktok-forwarder
+pm2 start dist/main.js --name tiktok-forwarder
 
 # 3. Save & Startup
 pm2 save

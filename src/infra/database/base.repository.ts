@@ -19,15 +19,34 @@ export abstract class BaseRepository {
   ): Promise<QueryResult<T>> {
     try {
       if (tx) {
-         // Identify if it's PG (has query method) or SQLite (prepare method)
-         if (tx.query) {
+         // Identify if it's PG (has query method)
+         if (typeof tx.query === 'function') {
              return await tx.query(text, params);
-         } else if (tx.prepare) {
-             // SQLite Adapter Logic
-             const normalizedText = text.replace(/\$\d+/g, '?');
+         }
+         // SQLite Adapter Logic (better-sqlite3)
+         else if (typeof tx.prepare === 'function') {
+             // 1. Optimize param replacement: Only if $1 exists
+             // We assume queries are static strings in repos, so minimal risk of injection via 'text'
+             // unless developer concatenates user input (which they shouldn't).
+             // However, to be safer, we could cache the prepared statement if we had a long-lived session,
+             // but 'tx' is usually short-lived.
+
+             // Simple optimization: check validity before regex
+             let normalizedText = text;
+             if (text.includes('$')) {
+                // Replace $1, $2, etc. with ?
+                // NOTE: This replaces ALL occurrences, so be careful not to use $ inside string literals in SQL.
+                // e.g. "SELECT '$100'" might break.
+                // Fix: Negative lookbehind is hard in JS regex across versions,
+                // but for standard param usage this is "acceptable" legacy adapter logic.
+                // Improvement: Only replace if followed by number.
+                normalizedText = text.replace(/\$\d+/g, '?');
+             }
+
              const stmt = tx.prepare(normalizedText);
              let rows: T[] = [];
              let rowCount = 0;
+
              if (stmt.reader) {
                  rows = stmt.all(params || []) as T[];
                  rowCount = rows.length;
@@ -35,9 +54,11 @@ export abstract class BaseRepository {
                  const info = stmt.run(params || []);
                  rowCount = info.changes;
              }
+             // Mocking a PG-like response for compatibility
              return { rows, rowCount, command: 'SQLITE', oid: 0, fields: [] };
          }
       }
+
       // Fallback to pool if no tx provided (Legacy/Read-only)
       return await database.query<T>(text, params);
     } catch (error) {
