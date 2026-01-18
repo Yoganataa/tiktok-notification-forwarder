@@ -1,8 +1,8 @@
 // src/core/config/config.ts
 import dotenv from 'dotenv';
 import { ValidationError } from '../errors/validation.error';
-import { logger } from '../../utils/logger';
-import { SystemConfigRepository } from '../../repositories/system-config.repository';
+import { logger } from '../../shared/utils/logger';
+import { SystemConfigRepository } from '../repositories/system-config.repository';
 
 dotenv.config();
 
