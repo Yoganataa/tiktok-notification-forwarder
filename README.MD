@@ -2,17 +2,19 @@
 
 Bot Discord production-ready yang mendeteksi notifikasi TikTok Live dari bot sumber dan meneruskannya ke channel yang sesuai berdasarkan mapping.
 
-Versi **2.1.0** memperkenalkan **Adapter Pattern** pada layer database, memungkinkan fleksibilitas penuh untuk menggunakan **SQLite** (tanpa setup server) atau **PostgreSQL** (untuk skala besar) tanpa mengubah logika bisnis.
+Versi **2.2.0** (Enterprise Upgrade) memperkenalkan fitur-fitur canggih untuk reliabilitas dan otomatisasi, termasuk **Media Downloader**, **Queue System**, dan **Auto-Provisioning**.
 
-## 🚀 Fitur Baru v2.1
+## 🚀 Fitur Baru v2.2 (Enterprise)
 
-- **Dual Database Support**: Dukungan native untuk SQLite (`better-sqlite3`) dan PostgreSQL (`pg`).
-- **Zero-Dependency Start**: Mode SQLite berjalan langsung dari file lokal. Tidak butuh Docker atau install server database.
-- **Auto-Migration**: Sistem migrasi mandiri yang mendeteksi driver aktif dan menjalankan skema SQL yang sesuai saat startup.
-- **Hot-Reload Config**: Update konfigurasi bot tanpa restart via command `/menu`.
+- **Media Downloader**: Mengganti link TikTok dengan file video/gambar asli menggunakan `btch-downloader` (fallback ke API lain). Mengatasi limit embed Discord.
+- **Reliability Queue**: Sistem antrian berbasis database (`message_queue`) memastikan notifikasi tidak hilang jika terjadi kegagalan jaringan atau limit rate Discord.
+- **Strict Auto-Provisioning**: Otomatis membuat channel baru untuk user TikTok yang belum terdaftar. Nama channel disanitasi (hanya huruf a-z) dan dibuat di bawah kategori khusus.
+- **Role Tagging**: Dukungan tagging role (`@Role`) pada notifikasi mapping spesifik.
+- **TikTok Utility**: Command `/tiktok` untuk download manual, stalk profil, dan pencarian.
 
 ## 📋 Fitur Utama
 
+- **Dual Database Support**: SQLite (file-based) atau PostgreSQL (production grade).
 - **Auto-Detection**: Mendeteksi notifikasi live menggunakan multiple regex patterns.
 - **Multi-Server Support**: Bot dapat meneruskan notifikasi dari server eksternal ke core server.
 - **Smart Forwarding**: Routing notifikasi ke channel spesifik per user.
@@ -49,6 +51,7 @@ OWNER_ID=your_discord_id
 SOURCE_BOT_IDS=123456789,987654321
 CORE_SERVER_ID=main_guild_id
 FALLBACK_CHANNEL_ID=log_channel_id
+AUTO_CREATE_CATEGORY_ID=your_category_id_for_new_channels
 
 # --- DATABASE OPTION 1: SQLite (Recommended untuk Local/Small Scale) ---
 DATABASE_URL=sqlite://./database.sqlite
@@ -95,6 +98,9 @@ npm start
 | `/mapping` | `remove` | Menghapus mapping | Admin |
 | `/mapping` | `list` | Melihat semua mapping aktif | Sudo+ |
 | `/mapping` | `info` | Cek detail mapping spesifik | Sudo+ |
+| `/tiktok` | `dl` | Download video TikTok manual | Sudo+ |
+| `/tiktok` | `stalk` | Lihat profil user TikTok | Sudo+ |
+| `/tiktok` | `search` | Cari user TikTok | Sudo+ |
 | `/admin` | `setrole` | Mengangkat staff (Admin/Sudo) | Owner/Admin |
 | `/admin` | `revoke` | Mencabut akses staff | Owner/Admin |
 
@@ -109,6 +115,7 @@ npm start
 src/
 ├── commands/             # Handler Slash Command
 ├── controllers/          # Logika interaksi UI (Button/Modal)
+│   └── admin/            # Sub-controllers untuk Admin Panel
 ├── core/
 │   ├── config/           # Config Manager & Loader
 │   ├── database/         # Database Layer
@@ -117,7 +124,7 @@ src/
 │   │   └── transaction.ts# Abstract Transaction Handler
 │   └── types/            # Type Definitions
 ├── repositories/         # Data Access Layer (SQL Queries)
-├── services/             # Business Logic (Notification, Forwarder, Migration)
+├── services/             # Business Logic (Queue, Downloader, Notification, Forwarder)
 └── utils/                # Helper (Logger, Retry, Validation)
 
 ```
@@ -153,6 +160,15 @@ npm start
 **Database Locked (SQLite)**
 
 * Bot menggunakan mode WAL (Write-Ahead Logging) untuk performa tinggi. Pastikan tidak ada aplikasi lain (seperti DB Browser) yang menahan lock file database dalam mode "Write" saat bot berjalan.
+
+### Media Downloader & Queue Architecture
+
+Bot ini menggunakan sistem antrian (`QueueService`) untuk menangani download media yang berat.
+1. `ForwarderService` mendeteksi link, melakukan **Sanitasi User**, dan menyimpan metadata (URL, Channel ID) ke tabel `message_queue`.
+2. Sebuah **Worker Process** (interval loop) membaca job `PENDING` dari database.
+3. `DownloaderService` mendownload media (Video/Slides) ke memori (Buffer).
+4. Jika file < 25MB, bot mengupload file tersebut ke Discord.
+5. Jika gagal atau file terlalu besar, bot otomatis fallback mengirim link asli.
 
 ## 🚀 Deployment (PM2)
 
