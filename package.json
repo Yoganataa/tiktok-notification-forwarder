@@ -1,6 +1,6 @@
 {
   "name": "tiktok-notification-forwarder",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Production-ready Discord bot to forward TikTok notifications",
   "main": "dist/index.js",
   "scripts": {

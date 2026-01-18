@@ -111,22 +111,31 @@ npm start
 
 ## 🏗️ Architecture
 
+Project ini menggunakan **Modular Feature-based Architecture** untuk skalabilitas.
+
 ```
 src/
-├── commands/             # Handler Slash Command
-├── controllers/          # Logika interaksi UI (Button/Modal)
-│   └── admin/            # Sub-controllers untuk Admin Panel
-├── core/
-│   ├── config/           # Config Manager & Loader
-│   ├── database/         # Database Layer
-│   │   ├── migrations/   # SQL Files (Postgres & SQLite separated)
-│   │   ├── connection.ts # Adapter Pattern Logic (Driver Switcher)
-│   │   └── transaction.ts# Abstract Transaction Handler
-│   └── types/            # Type Definitions
-├── repositories/         # Data Access Layer (SQL Queries)
-├── services/             # Business Logic (Queue, Downloader, Notification, Forwarder)
-└── utils/                # Helper (Logger, Retry, Validation)
-
+├── core/                 # Core Infrastructure (Config, Database, Types)
+│   ├── config/
+│   ├── database/
+│   ├── errors/
+│   ├── repositories/     # Data Access Layer
+│   └── services/         # Core Services (Migration)
+├── features/             # Feature Modules
+│   ├── admin/            # Admin Logic (Role, Permission)
+│   ├── downloader/       # Download Engines (Strategy Pattern)
+│   │   └── engines/      # Implementasi Engine (Btch, Toby, YtDlp, Hans)
+│   ├── forwarder/        # Message Listener & Routing Logic
+│   ├── mapping/          # User Mapping Logic
+│   ├── menu/             # Interactive Menu UI & Router
+│   ├── notification/     # Embed Builder & Notification Logic
+│   ├── queue/            # Job Queue System
+│   ├── start/            # Start Command
+│   └── tiktok/           # TikTok Utility Commands (Search, Stalk)
+├── shared/               # Shared Utilities & Components
+│   ├── components/       # UI Components (Paginator)
+│   └── utils/            # Helpers (Logger, Retry, Validation)
+└── index.ts              # Application Entry Point
 ```
 
 ## 🛠️ Maintenance & Troubleshooting
