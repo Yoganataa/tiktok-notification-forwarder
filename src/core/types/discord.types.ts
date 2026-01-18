@@ -27,4 +27,6 @@ export interface ForwardConfig {
   isCrossServer: boolean;
   /** The name of the source guild, used for attribution in cross-server forwards. */
   sourceServerName?: string;
+  /** The Discord Role ID to tag in the notification. */
+  roleId?: string | null;
 }

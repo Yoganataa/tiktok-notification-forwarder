@@ -1,11 +1,10 @@
-// src/services/forwarder.service.ts
-import { Message, Client } from 'discord.js';
+import { Message, Client, ChannelType } from 'discord.js';
 import { NotificationService } from './notification.service';
+import { QueueService } from './queue.service';
+import { UserMappingRepository } from '../repositories/user-mapping.repository';
 import { configManager } from '../core/config/config';
 import { logger } from '../utils/logger';
-import { withRetry } from '../utils/retry';
 import { REACTION_EMOJIS } from '../constants';
-import { NotificationData } from '../core/types';
 
 /**
  * Service responsible for orchestrating the notification forwarding flow.
@@ -13,7 +12,11 @@ import { NotificationData } from '../core/types';
  * TikTok notifications to the appropriate destination channels within the Core Server.
  */
 export class ForwarderService {
-  constructor(private notificationService: NotificationService) {}
+  constructor(
+    private notificationService: NotificationService,
+    private queueService: QueueService,
+    private userMappingRepo: UserMappingRepository
+  ) {}
 
   /**
    * Main entry point for processing incoming Discord messages.
@@ -31,7 +34,7 @@ export class ForwarderService {
     }
 
     const notification = this.notificationService.extractNotification(message);
-    if (!notification) {
+    if (!notification || !notification.url) {
       return;
     }
 
@@ -46,11 +49,42 @@ export class ForwarderService {
     });
 
     try {
-      if (isFromCoreServer) {
-        await this.forwardInCoreServer(notification, message);
+      let channelId: string;
+      let roleId: string | null = null;
+
+      const mapping = await this.userMappingRepo.findByUsername(notification.username);
+
+      if (mapping) {
+          channelId = mapping.channel_id;
+          roleId = mapping.role_id || null;
       } else {
-        await this.forwardToCoreServer(notification, message);
+          // Auto-provisioning
+          channelId = await this.handleAutoProvisioning(notification.username, message.client);
+          // If auto-provisioning returned fallback, roleId remains null.
       }
+
+      const sourceServerName = !isFromCoreServer ? (message.guild?.name || 'Unknown Server') : undefined;
+
+      await this.queueService.enqueue({
+        url: notification.url,
+        username: notification.username,
+        channelId,
+        roleId,
+        notificationData: notification,
+        sourceServer: sourceServerName,
+        isCrossServer: !isFromCoreServer
+      });
+
+      await this.notificationService.addReaction(
+        message,
+        isFromCoreServer ? REACTION_EMOJIS.CORE_SERVER : REACTION_EMOJIS.EXTERNAL_SERVER
+      );
+
+      logger.info('Notification queued for processing', {
+        username: notification.username,
+        channelId,
+      });
+
     } catch (error) {
       logger.error('Failed to forward notification', {
         username: notification.username,
@@ -59,111 +93,34 @@ export class ForwarderService {
     }
   }
 
-  /**
-   * Handles forwarding logic for notifications originating from within the Core Server.
-   * * Uses standard formatting without cross-server attribution.
-   * * Reacts with the Core Server emoji on success.
-   * * @param notification - The extracted notification data.
-   * * @param message - The original source message.
-   */
-  private async forwardInCoreServer(
-    notification: NotificationData,
-    message: Message
-  ): Promise<void> {
-    const forwardConfig = await this.notificationService.getForwardConfig(
-      notification.username,
-      false
-    );
+  private async handleAutoProvisioning(username: string, client: Client): Promise<string> {
+      const config = configManager.get();
+      // Sanitize: lowercase and strip ALL characters that are not letters (a-z).
+      const sanitized = username.toLowerCase().replace(/[^a-z]/g, '');
 
-    const embed = this.notificationService.createEmbed(
-      notification,
-      forwardConfig
-    );
+      if (!sanitized || sanitized.length < 2) {
+          return config.bot.fallbackChannelId;
+      }
 
-    await this.notificationService.sendToChannel(
-      message.client,
-      forwardConfig.channelId,
-      embed,
-      notification.url
-    );
+      try {
+        const coreServer = await client.guilds.fetch(config.discord.coreServerId);
+        if (!coreServer) {
+            logger.warn('Core server not found for auto-provisioning');
+            return config.bot.fallbackChannelId;
+        }
 
-    await this.notificationService.addReaction(
-      message,
-      REACTION_EMOJIS.CORE_SERVER
-    );
+        const channel = await coreServer.channels.create({
+            name: sanitized,
+            type: ChannelType.GuildText,
+            parent: config.bot.autoCreateCategoryId // "specifically under the parent category"
+        });
 
-    logger.info('Notification forwarded in core server', {
-      username: notification.username,
-      channelId: forwardConfig.channelId,
-    });
-  }
-
-  /**
-   * Handles forwarding logic for notifications originating from external/subscriber servers.
-   * * Adds source server attribution to the forwarded message.
-   * * Reacts with the External Server emoji on success.
-   * * @param notification - The extracted notification data.
-   * * @param message - The original source message.
-   */
-  private async forwardToCoreServer(
-    notification: NotificationData,
-    message: Message
-  ): Promise<void> {
-    const config = configManager.get();
-    const coreServer = await this.fetchCoreServer(message.client);
-
-    if (!coreServer) {
-      logger.error('Core server not accessible', {
-        coreServerId: config.discord.coreServerId,
-      });
-      return;
-    }
-
-    const sourceServerName = message.guild?.name || 'Unknown Server';
-    const forwardConfig = await this.notificationService.getForwardConfig(
-      notification.username,
-      true,
-      sourceServerName
-    );
-
-    const embed = this.notificationService.createEmbed(
-      notification,
-      forwardConfig
-    );
-
-    await this.notificationService.sendToChannel(
-      message.client,
-      forwardConfig.channelId,
-      embed,
-      notification.url
-    );
-
-    await this.notificationService.addReaction(
-      message,
-      REACTION_EMOJIS.EXTERNAL_SERVER
-    );
-
-    logger.info('Notification forwarded to core server', {
-      username: notification.username,
-      sourceServer: sourceServerName,
-      channelId: forwardConfig.channelId,
-    });
-  }
-
-  /**
-   * Helper method to fetch the Core Guild object with retry logic.
-   * * Ensures connectivity to the main server before attempting to forward.
-   * * @param client - The Discord client instance.
-   * * @returns The Guild object if found, otherwise null.
-   */
-  private async fetchCoreServer(client: Client) {
-    const config = configManager.get();
-    try {
-      return await withRetry(() =>
-        client.guilds.fetch(config.discord.coreServerId)
-      );
-    } catch (error) {
-      return null;
-    }
+        await this.userMappingRepo.upsert(username, channel.id);
+        logger.info('Auto-provisioned channel', { username, channelId: channel.id });
+        return channel.id;
+      } catch (error) {
+          logger.error('Failed to auto-provision channel', { username, error: (error as Error).message });
+          return config.bot.fallbackChannelId;
+      }
   }
 }

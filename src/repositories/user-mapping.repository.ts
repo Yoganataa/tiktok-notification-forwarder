@@ -1,4 +1,3 @@
-// src/repositories/user-mapping.repository.ts
 import { PoolClient } from 'pg';
 import NodeCache from 'node-cache';
 import { BaseRepository } from './base.repository';
@@ -17,24 +16,26 @@ export class UserMappingRepository extends BaseRepository {
   async upsert(
     username: string,
     channelId: string,
+    roleId?: string | null,
     client?: PoolClient
   ): Promise<UserMapping> {
     const cleanUsername = username.toLowerCase().trim();
+    const sanitizedRoleId = roleId || null;
 
-    // FIX: Ubah NOW() menjadi CURRENT_TIMESTAMP
     const sql = `
-      INSERT INTO user_mapping (username, channel_id, created_at, updated_at)
-      VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      INSERT INTO user_mapping (username, channel_id, role_id, created_at, updated_at)
+      VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT (username)
       DO UPDATE SET 
         channel_id = EXCLUDED.channel_id,
+        role_id = EXCLUDED.role_id,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *
     `;
 
     const result = await this.queryOne<UserMapping>(
       sql,
-      [cleanUsername, channelId],
+      [cleanUsername, channelId, sanitizedRoleId],
       client
     );
 

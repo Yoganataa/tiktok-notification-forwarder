@@ -1,4 +1,3 @@
-// src/commands/mapping.command.ts
 import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
@@ -42,6 +41,12 @@ export const mappingCommand = new SlashCommandBuilder()
           .setDescription('Target channel for notifications')
           .setRequired(true)
           .addChannelTypes(ChannelType.GuildText)
+      )
+      .addRoleOption((opt) =>
+        opt
+          .setName('role')
+          .setDescription('Optional role to tag')
+          .setRequired(false)
       )
   )
   .addSubcommand((sub) =>
@@ -153,13 +158,14 @@ async function handleAdd(
     'channel',
     true
   ) as GuildChannel;
+  const role = interaction.options.getRole('role');
 
   if (!channel.isTextBased()) {
     throw new ValidationError('The selected channel must be a text channel.');
   }
 
   const mapping = await withRetry(() =>
-    userMappingRepo.upsert(username, channel.id)
+    userMappingRepo.upsert(username, channel.id, role?.id || null)
   );
 
   const isUpdate =
@@ -171,6 +177,7 @@ async function handleAdd(
     .addFields(
       { name: 'Username', value: `@${mapping.username}`, inline: true },
       { name: 'Channel', value: `<#${mapping.channel_id}>`, inline: true },
+      { name: 'Role', value: mapping.role_id ? `<@&${mapping.role_id}>` : 'None', inline: true },
       {
         name: 'Action',
         value: isUpdate ? 'Updated existing' : 'Created new',
@@ -185,6 +192,7 @@ async function handleAdd(
   logger.info('Mapping added/updated', {
     username: mapping.username,
     channelId: mapping.channel_id,
+    roleId: mapping.role_id,
     userId: interaction.user.id,
     isUpdate,
   });
@@ -297,6 +305,7 @@ async function handleInfo(
     .addFields(
       { name: 'Username', value: `@${mapping.username}`, inline: true },
       { name: 'Channel', value: `<#${mapping.channel_id}>`, inline: true },
+      { name: 'Role', value: mapping.role_id ? `<@&${mapping.role_id}>` : 'None', inline: true },
       {
         name: 'Created',
         value: `<t:${Math.floor(mapping.created_at.getTime() / 1000)}:R>`,
@@ -323,7 +332,8 @@ function chunkMappings(mappings: any[]): string[] {
   let currentChunk = '';
 
   for (const mapping of mappings) {
-    const line = `• @${mapping.username} → <#${mapping.channel_id}>\n`;
+    const roleTag = mapping.role_id ? ` (Tag: <@&${mapping.role_id}>)` : '';
+    const line = `• @${mapping.username} → <#${mapping.channel_id}>${roleTag}\n`;
 
     if (
       (currentChunk + line).length > DISCORD_LIMITS.EMBED_FIELD_LENGTH

@@ -10,15 +10,19 @@ import { commandList } from './commands';
 import { handleMappingCommand } from './commands/mapping.command';
 import { handleMenuCommand } from './commands/menu.command';
 import { handleAdminCommand } from './commands/admin.command';
+import { handleTikTokCommand } from './commands/tiktok.command';
 import { AdminController } from './controllers/admin.controller';
 
 // Services & Repositories
 import { UserMappingRepository } from './repositories/user-mapping.repository';
 import { AccessControlRepository } from './repositories/access-control.repository';
 import { SystemConfigRepository } from './repositories/system-config.repository';
+import { QueueRepository } from './repositories/queue.repository';
 import { PermissionService } from './services/permission.service';
 import { NotificationService } from './services/notification.service';
 import { ForwarderService } from './services/forwarder.service';
+import { QueueService } from './services/queue.service';
+import { DownloaderService } from './services/downloader.service';
 import { MigrationService } from './services/migration.service';
 
 /**
@@ -30,6 +34,7 @@ class Application {
   private client: Client;
   private config: ReturnType<typeof configManager.get>;
   private forwarderService: ForwarderService;
+  private queueService: QueueService;
   private permissionService: PermissionService;
   private adminController: AdminController;
   private systemConfigRepo: SystemConfigRepository;
@@ -59,9 +64,13 @@ class Application {
     const accessControlRepo = new AccessControlRepository();
     this.systemConfigRepo = new SystemConfigRepository();
 
-    this.permissionService = new PermissionService(accessControlRepo);
+    const queueRepo = new QueueRepository();
+    const downloaderService = new DownloaderService();
     const notificationService = new NotificationService(userMappingRepo);
-    this.forwarderService = new ForwarderService(notificationService);
+    this.queueService = new QueueService(queueRepo, downloaderService, notificationService);
+
+    this.permissionService = new PermissionService(accessControlRepo);
+    this.forwarderService = new ForwarderService(notificationService, this.queueService, userMappingRepo);
 
     this.adminController = new AdminController(
       this.permissionService,
@@ -95,6 +104,9 @@ class Application {
       await migrationService.run();
 
       await this.configManagerReload();
+
+      // Start Queue Worker
+      setInterval(() => this.queueService.processQueue(this.client), 5000);
 
       await this.client.login(this.config.discord.token);
     } catch (error) {
@@ -173,6 +185,7 @@ class Application {
       case 'mapping': await handleMappingCommand(interaction, this.permissionService); break;
       case 'menu': await handleMenuCommand(interaction, this.permissionService); break;
       case 'admin': await handleAdminCommand(interaction, this.permissionService); break;
+      case 'tiktok': await handleTikTokCommand(interaction); break;
     }
   }
 

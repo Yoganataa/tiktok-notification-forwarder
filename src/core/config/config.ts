@@ -21,6 +21,7 @@ export interface AppConfig {
   bot: {
     sourceBotIds: string[];
     fallbackChannelId: string;
+    autoCreateCategoryId: string;
   };
   database: {
     driver: DatabaseDriver;
@@ -64,6 +65,7 @@ class ConfigManager {
       bot: {
         sourceBotIds: this.parseList(process.env.SOURCE_BOT_IDS || ''),
         fallbackChannelId: process.env.FALLBACK_CHANNEL_ID || '0',
+        autoCreateCategoryId: process.env.AUTO_CREATE_CATEGORY_ID || '0',
       },
       database: {
         driver: driver,
@@ -108,6 +110,10 @@ class ConfigManager {
             this.config!.bot.fallbackChannelId = value; 
             updatesCount++; 
             break;
+          case 'AUTO_CREATE_CATEGORY_ID':
+            this.config!.bot.autoCreateCategoryId = value;
+            updatesCount++;
+            break;
           case 'CORE_SERVER_ID': 
             this.config!.discord.coreServerId = value; 
             updatesCount++; 
@@ -138,6 +144,7 @@ class ConfigManager {
     const seedData = {
       'SOURCE_BOT_IDS': config.bot.sourceBotIds.join(','),
       'FALLBACK_CHANNEL_ID': config.bot.fallbackChannelId,
+      'AUTO_CREATE_CATEGORY_ID': config.bot.autoCreateCategoryId,
       'CORE_SERVER_ID': config.discord.coreServerId,
       'DB_MAX_CONNECTIONS': config.database.maxConnections.toString(),
       'DB_MIN_CONNECTIONS': config.database.minConnections.toString()
