@@ -1,6 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
 import { DownloaderService } from '../downloader/downloader.service';
-import { Search, StalkUser } from '../downloader/engines/toby-lib/index';
+import TobyLib from '../downloader/engines/toby-lib/index';
 import { logger } from '../../shared/utils/logger';
 
 export const tiktokCommand = new SlashCommandBuilder()
@@ -23,8 +23,6 @@ export async function handleTikTokCommand(interaction: ChatInputCommandInteracti
     const subcommand = interaction.options.getSubcommand();
     await interaction.deferReply();
 
-    // Use dummy config repo or inject?
-    // DownloaderService needs config repo.
     const { SystemConfigRepository } = require('../../core/repositories/system-config.repository');
     const service = new DownloaderService(new SystemConfigRepository());
 
@@ -50,13 +48,13 @@ export async function handleTikTokCommand(interaction: ChatInputCommandInteracti
                 return;
             }
             const username = interaction.options.getString('username', true);
-            const result = await StalkUser(username);
+            const result = await TobyLib.StalkUser(username);
             if (result.status === 'success' && result.result) {
                 const user = result.result.user;
                 const stats = result.result.stats;
                 const content = `**${user.nickname}** (@${user.username})\n` +
                                 `Followers: ${stats.followerCount} | Following: ${stats.followingCount} | Likes: ${stats.heartCount}\n` +
-                                `${user.signature}\n${user.avatar}`;
+                                `${user.signature}\n${user.avatarThumb}`;
                 await interaction.editReply(content);
             } else {
                 await interaction.editReply('User not found or error fetching data.');
@@ -67,7 +65,7 @@ export async function handleTikTokCommand(interaction: ChatInputCommandInteracti
                 return;
             }
             const query = interaction.options.getString('query', true);
-            const result = await Search(query, { type: 'user', page: 1 });
+            const result = await TobyLib.Search(query, { type: 'user', page: 1, cookie: process.env.COOKIE });
             if (result.status === 'success' && result.result && Array.isArray(result.result) && result.result.length > 0) {
                 const users = result.result.slice(0, 5).map((u: any) => `• **${u.nickname}** (@${u.username}) - ${u.followerCount} followers`).join('\n');
                 await interaction.editReply(`Search results for "${query}":\n${users}`);
