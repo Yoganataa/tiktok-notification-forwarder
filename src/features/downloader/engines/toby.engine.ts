@@ -17,7 +17,9 @@ export class TobyEngine implements DownloadEngine {
        throw new Error(`Toby downloader failed: ${result.message}`);
     }
 
-    const data = result.result;
+    // Cast to any because the types are complex unions and properties might not exist on all union members
+    // This fixes "Property 'video' does not exist" errors
+    const data = result.result as any;
 
     if (data.type === 'image' && data.images && data.images.length > 0) {
        const buffer = await fetchBuffer(data.images[0]);
@@ -29,7 +31,7 @@ export class TobyEngine implements DownloadEngine {
     }
 
     if (data.type === 'video' && data.video) {
-        // Some providers return array, some object? Types say video: string[] | ...
+        // Handle array or string video output
         const videoUrl = (Array.isArray(data.video) ? data.video[0] : data.video) as string;
 
         if (!videoUrl) throw new Error('No video URL');
