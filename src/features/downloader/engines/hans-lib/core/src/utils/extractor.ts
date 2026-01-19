@@ -33,6 +33,7 @@ export const runObfuscatedScript = (jsCode: string): string => {
     const deObfuscated = new NodeVM({
         compiler: 'javascript',
         console: 'inherit',
+        sandbox: { window: {} }, // Fix: Inject window object for scripts that expect it
         require: {
             external: true,
             root: './',
@@ -97,6 +98,7 @@ export const deObfuscateSaveFromScript = (scriptContent: string): string => {
     const vm = new NodeVM({
         compiler: 'javascript',
         console: 'inherit',
+        sandbox: { window: {} },
         require: {
             external: true,
             root: './',

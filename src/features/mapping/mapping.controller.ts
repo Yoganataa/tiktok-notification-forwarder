@@ -87,7 +87,8 @@ export class MappingController {
       const mapping = await this.userMappingRepo.findByUsername(username);
 
       if (!mapping) {
-        await interaction.reply({ content: '❌ Mapping not found in DB.', ephemeral: true });
+        if (interaction.deferred || interaction.replied) await interaction.editReply({ content: '❌ Mapping not found in DB.' });
+        else await interaction.reply({ content: '❌ Mapping not found in DB.', ephemeral: true });
         return;
       }
 
@@ -105,7 +106,12 @@ export class MappingController {
         new ButtonBuilder().setCustomId('nav_mappings').setLabel('Back').setStyle(ButtonStyle.Secondary).setEmoji('⬅️')
       );
 
-      await interaction.update({ embeds: [embed], components: [row] });
+      const payload = { embeds: [embed], components: [row] };
+      if (interaction.deferred || interaction.replied) {
+          await interaction.editReply(payload);
+      } else {
+          await interaction.update(payload);
+      }
     }
   }
 

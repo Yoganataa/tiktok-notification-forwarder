@@ -60,7 +60,10 @@ export async function handleMappingCommand(
         userMappingRepo.upsert(username, channel.id)
     );
 
-    const isUpdate = mapping.created_at.getTime() !== mapping.updated_at.getTime();
+    // Safely handle dates (SQLite returns strings)
+    const createdTime = new Date(mapping.created_at).getTime();
+    const updatedTime = new Date(mapping.updated_at).getTime();
+    const isUpdate = createdTime !== updatedTime;
 
     const embed = new EmbedBuilder()
         .setColor(EMBED_COLORS.SUCCESS)

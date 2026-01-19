@@ -72,7 +72,8 @@ export class RoleController {
       }
       await this.showManager(interaction);
     } catch (error) {
-      await interaction.reply({ content: `❌ Error: ${(error as Error).message}`, ephemeral: true });
+      if (interaction.deferred || interaction.replied) await interaction.editReply({ content: `❌ Error: ${(error as Error).message}` });
+      else await interaction.reply({ content: `❌ Error: ${(error as Error).message}`, ephemeral: true });
     }
   }
 
@@ -91,7 +92,12 @@ export class RoleController {
         new ButtonBuilder().setCustomId('nav_roles').setLabel('Back').setStyle(ButtonStyle.Secondary).setEmoji('⬅️')
       );
 
-      await interaction.update({ embeds: [embed], components: [row] });
+      const payload = { embeds: [embed], components: [row] };
+      if (interaction.deferred || interaction.replied) {
+          await interaction.editReply(payload);
+      } else {
+          await interaction.update(payload);
+      }
     }
   }
 
