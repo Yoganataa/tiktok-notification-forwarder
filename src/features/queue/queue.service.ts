@@ -104,7 +104,12 @@ export class QueueService {
              }
           }
       } else {
-          await (channel as any).send({ content: content + url, embeds: [embed] });
+          try {
+            await (channel as any).send({ content: content + url, embeds: [embed] });
+          } catch (e) {
+            logger.error('Failed to send fallback message', { error: (e as Error).message });
+            throw e; // Rethrow to mark as failed/retry
+          }
       }
 
       await this.repository.markDone(job.id);

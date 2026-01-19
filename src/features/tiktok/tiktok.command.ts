@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { DownloaderService } from '../downloader/downloader.service';
 import TobyLib from '../downloader/engines/toby-lib/index';
 import { logger } from '../../shared/utils/logger';
@@ -52,10 +52,23 @@ export async function handleTikTokCommand(interaction: ChatInputCommandInteracti
             if (result.status === 'success' && result.result) {
                 const user = result.result.user;
                 const stats = result.result.stats;
-                const content = `**${user.nickname}** (@${user.username})\n` +
-                                `Followers: ${stats.followerCount} | Following: ${stats.followingCount} | Likes: ${stats.heartCount}\n` +
-                                `${user.signature}\n${user.avatarThumb}`;
-                await interaction.editReply(content);
+
+                const embed = new EmbedBuilder()
+                    .setTitle(`@${user.username}`)
+                    .setURL(`https://www.tiktok.com/@${user.username}`)
+                    .setDescription(user.signature || 'No bio')
+                    .setThumbnail(user.avatarThumb)
+                    .addFields(
+                        { name: 'Nickname', value: user.nickname || 'Unknown', inline: true },
+                        { name: 'Followers', value: (stats.followerCount || 0).toString(), inline: true },
+                        { name: 'Following', value: (stats.followingCount || 0).toString(), inline: true },
+                        { name: 'Likes', value: (stats.heartCount || 0).toString(), inline: true },
+                        { name: 'Videos', value: (stats.videoCount || 0).toString(), inline: true }
+                    )
+                    .setColor(0x00f2ea)
+                    .setFooter({ text: 'TikTok Stalk' });
+
+                await interaction.editReply({ content: null, embeds: [embed] });
             } else {
                 await interaction.editReply('User not found or error fetching data.');
             }

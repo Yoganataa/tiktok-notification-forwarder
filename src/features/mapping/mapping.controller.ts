@@ -56,8 +56,12 @@ export class MappingController {
     );
 
     const payload = { embeds: [embed], components: [rowSelect, rowButtons], ephemeral: true };
-    if (interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) await (interaction as any).update(payload);
-    else await (interaction as any).reply(payload);
+    if (interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) {
+        if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
+        else await (interaction as any).update(payload);
+    } else {
+        await (interaction as any).reply(payload);
+    }
   }
 
   async handleButton(interaction: ButtonInteraction, action: string, username: string): Promise<void> {
