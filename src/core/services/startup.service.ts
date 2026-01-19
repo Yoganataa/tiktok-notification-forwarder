@@ -1,6 +1,6 @@
-import YTDlpWrap from 'yt-dlp-wrap';
 import path from 'path';
 import fs from 'fs';
+import axios from 'axios';
 import { logger } from '../../shared/utils/logger';
 
 export class StartupService {
@@ -12,11 +12,18 @@ export class StartupService {
   }
 
   private static async initYtDlp(): Promise<void> {
-    const binaryPath = path.resolve('./yt-dlp');
+    const binaryName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+    const binaryPath = path.resolve(`./${binaryName}`);
+
     if (!fs.existsSync(binaryPath)) {
       logger.info('📥 Downloading yt-dlp binary...');
       try {
-        await YTDlpWrap.downloadFromGithub(binaryPath);
+        const url = process.platform === 'win32'
+            ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+            : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+
+        await this.downloadFile(url, binaryPath);
+
         // Make executable on Linux/Mac
         if (process.platform !== 'win32') {
             fs.chmodSync(binaryPath, '755');
@@ -30,12 +37,29 @@ export class StartupService {
     }
   }
 
+  private static async downloadFile(url: string, dest: string): Promise<void> {
+      const writer = fs.createWriteStream(dest);
+      const response = await axios({
+          url,
+          method: 'GET',
+          responseType: 'stream'
+      });
+
+      response.data.pipe(writer);
+
+      return new Promise((resolve, reject) => {
+          writer.on('finish', resolve);
+          writer.on('error', reject);
+      });
+  }
+
   private static async verifyDependencies(): Promise<void> {
     // Check for runtime requirements that might be missing in some environments
     try {
         require('vm2');
         require('cheerio');
         require('btch-downloader');
+        require('youtube-dl-exec');
         logger.info('✅ Critical runtime dependencies verified.');
     } catch (error) {
         logger.warn('⚠️ Some dependencies might be missing or failed to load.', { error });

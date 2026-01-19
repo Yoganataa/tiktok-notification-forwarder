@@ -1,56 +1,57 @@
 import { DownloadEngine, DownloadResult } from './types';
-import YTDlpWrap from 'yt-dlp-wrap';
 import path from 'path';
 import fs from 'fs';
-import { spawn } from 'child_process';
+import { create as createYoutubeDl } from 'youtube-dl-exec';
 
 export class YtDlpEngine implements DownloadEngine {
   name = 'yt-dlp';
-  private ytDlpWrap: YTDlpWrap | null = null;
 
-  private async getWrapper(): Promise<YTDlpWrap> {
-      if (this.ytDlpWrap) return this.ytDlpWrap;
-
-      const binaryPath = path.resolve('./yt-dlp');
-      if (!fs.existsSync(binaryPath)) {
-          console.log('Downloading yt-dlp binary...');
-          await YTDlpWrap.downloadFromGithub(binaryPath);
-          console.log('Downloaded yt-dlp binary.');
-      }
-      this.ytDlpWrap = new YTDlpWrap(binaryPath);
-      return this.ytDlpWrap;
+  private getBinaryPath(): string {
+      const binaryName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+      return path.resolve(`./${binaryName}`);
   }
 
   async download(url: string): Promise<DownloadResult> {
-    await this.getWrapper();
-    const binaryPath = path.resolve('./yt-dlp');
+    const binaryPath = this.getBinaryPath();
+
+    if (!fs.existsSync(binaryPath)) {
+        throw new Error('yt-dlp binary not found. Please wait for initialization.');
+    }
+
+    // Create a youtube-dl instance pointing to our local binary
+    const youtubedl = createYoutubeDl(binaryPath);
 
     return new Promise((resolve, reject) => {
         const chunks: Buffer[] = [];
-        const process = spawn(binaryPath, [url, '-o', '-', '--quiet', '--no-warnings']);
-        let stderr = '';
 
-        process.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
-        process.stderr.on('data', (chunk: Buffer) => {
-            stderr += chunk.toString();
-            console.error(`yt-dlp stderr: ${chunk}`);
+        // exec returns a ChildProcess-like object (execa)
+        const subprocess = youtubedl.exec(url, {
+            output: '-',
+            quiet: true,
+            noWarnings: true,
         });
 
-        process.on('close', (code: number) => {
-            if (code !== 0) {
-                // Ignore code 1 if we have some data, but yt-dlp usually doesn't output partially to stdout on failure
-                reject(new Error(`yt-dlp exited with code ${code}. Stderr: ${stderr}`));
-            }
-            else {
-                resolve({
-                    type: 'video',
-                    buffer: Buffer.concat(chunks),
-                    urls: [url]
-                });
-            }
-        });
+        // We need to access stdout from the subprocess
+        // youtube-dl-exec uses 'execa'. The subprocess has stdout property.
 
-        process.on('error', (err: Error) => reject(err));
+        if (subprocess.stdout) {
+            subprocess.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+        }
+
+        if (subprocess.stderr) {
+            subprocess.stderr.on('data', (chunk: Buffer) => console.error(`yt-dlp stderr: ${chunk}`));
+        }
+
+        // execa promise resolves when process finishes
+        subprocess.then(() => {
+            resolve({
+                type: 'video',
+                buffer: Buffer.concat(chunks),
+                urls: [url]
+            });
+        }).catch((err: Error) => {
+            reject(new Error(`yt-dlp failed: ${err.message}`));
+        });
     });
   }
 }
