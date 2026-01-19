@@ -62,7 +62,7 @@ export class ConfigController {
 
     // If interaction is deferred or component update, use editReply. If new, reply.
     if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
-        if (!interaction.deferred && !interaction.replied) await interaction.update(payload);
+        if (!interaction.deferred && !interaction.replied) await (interaction as any).update(payload);
         else await interaction.editReply(payload);
     } else {
         await (interaction as RepliableInteraction).reply({ ...payload, ephemeral: true });

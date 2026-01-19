@@ -169,7 +169,7 @@ export class MenuController {
     const payload = { embeds: [embed], components: [row1, row2] };
 
     if (interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) {
-      if (!interaction.deferred && !interaction.replied) await interaction.update(payload);
+      if (!interaction.deferred && !interaction.replied) await (interaction as any).update(payload);
       else await interaction.editReply(payload);
     } else {
       await interaction.reply({ ...payload, ephemeral: true });
