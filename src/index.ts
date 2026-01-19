@@ -62,7 +62,6 @@ class Application {
     this.queueService = new QueueService(queueRepo, downloaderService, notificationService, this.systemConfigRepo);
 
     this.permissionService = new PermissionService(accessControlRepo);
-    // Correct order: NotificationService, QueueService, UserMappingRepository
     this.forwarderService = new ForwarderService(notificationService, this.queueService, userMappingRepo);
 
     this.menuController = new MenuController(
@@ -166,7 +165,7 @@ class Application {
       case 'mapping': await handleMappingCommand(interaction, this.permissionService); break;
       case 'menu': await handleMenuCommand(interaction, this.permissionService); break;
       case 'admin': await handleAdminCommand(interaction, this.permissionService); break;
-      case 'tiktok': await handleTikTokCommand(interaction, this.permissionService); break; // Removed extra arg if not needed or fixed signature
+      case 'tiktok': await handleTikTokCommand(interaction); break;
       case 'start': await handleStartCommand(interaction); break;
     }
   }
@@ -175,7 +174,6 @@ class Application {
     try {
       const rest = new REST({ version: '10' }).setToken(this.config.discord.token);
 
-      // Ensure all commands are registered including start, mapping, tiktok
       const commandsBody = [
           ...commandList.map((cmd) => cmd.toJSON()),
           startCommand.toJSON(),
@@ -183,7 +181,6 @@ class Application {
           tiktokCommand.toJSON()
       ];
 
-      // Deduplicate commands by name
       const uniqueCommands = Array.from(new Map(commandsBody.map(cmd => [cmd.name, cmd])).values());
 
       logger.info('Updating global slash commands...', { count: uniqueCommands.length });
