@@ -16,11 +16,6 @@ import { MappingController } from '../mapping/mapping.controller';
 import { ConfigController } from '../admin/config.controller';
 import { RoleController } from '../admin/role.controller';
 
-/**
- * Menu Controller (Router).
- * * Manages the interactive UI flow for the bot's administration dashboard.
- * * Delegates logic to specific sub-controllers.
- */
 export class MenuController {
   private mappingController: MappingController;
   private configController: ConfigController;
@@ -49,7 +44,6 @@ export class MenuController {
         return;
     }
     if (id === 'btn_open_menu') {
-        // Only admin?
         if (!(await this.permissionService.isAdminOrHigher(interaction.user.id))) {
             await interaction.reply({ content: '⛔ Access Denied.', ephemeral: true });
             return;
@@ -64,20 +58,34 @@ export class MenuController {
     }
 
     if (id === 'nav_back_main') {
+      await interaction.deferUpdate();
       await this.showMainMenu(interaction);
       return;
     }
 
-    if (id === 'nav_env' || id === 'btn_edit_env') {
-        if (id === 'nav_env') await this.configController.showEnvironmentPage(interaction);
-        else await this.configController.showEditModal(interaction);
+    if (id === 'nav_env') {
+        await interaction.deferUpdate();
+        await this.configController.showEnvironmentPage(interaction);
+        return;
+    }
+    if (id === 'btn_edit_env') {
+        await this.configController.showEditModal(interaction);
+        return;
+    }
+    if (id === 'btn_toggle_autodl') {
+        await interaction.deferUpdate();
+        await this.configController.handleToggleAutoDl(interaction);
         return;
     }
 
     if (id === 'nav_roles' || id === 'btn_add_staff' || id.startsWith('role_act_')) {
-        if (id === 'nav_roles') await this.roleController.showManager(interaction);
+        if (id === 'nav_roles') {
+            await interaction.deferUpdate();
+            await this.roleController.showManager(interaction);
+        }
         else if (id === 'btn_add_staff') await this.roleController.showAddModal(interaction);
         else {
+             await interaction.deferUpdate();
              const parts = id.split('_');
              await this.roleController.handleButton(interaction, parts[2], parts[3]);
         }
@@ -85,9 +93,13 @@ export class MenuController {
     }
 
     if (id === 'nav_mappings' || id === 'btn_add_mapping' || id.startsWith('map_act_')) {
-        if (id === 'nav_mappings') await this.mappingController.showManager(interaction);
+        if (id === 'nav_mappings') {
+            await interaction.deferUpdate();
+            await this.mappingController.showManager(interaction);
+        }
         else if (id === 'btn_add_mapping') await this.mappingController.showAddModal(interaction);
         else {
+             await interaction.deferUpdate();
              const parts = id.split('_');
              await this.mappingController.handleButton(interaction, parts[2], parts[3]);
         }
@@ -95,6 +107,7 @@ export class MenuController {
     }
 
     if (id === 'nav_servers') {
+        await interaction.deferUpdate();
         await this.showServersPage(interaction);
         return;
     }
@@ -116,9 +129,16 @@ export class MenuController {
   }
 
   async handleSelectMenu(interaction: StringSelectMenuInteraction): Promise<void> {
+    if (interaction.customId === 'select_engine') {
+        await interaction.deferUpdate();
+        await this.configController.handleEngineSelect(interaction);
+        return;
+    }
     if (interaction.customId === 'select_staff_manage') {
+        await interaction.deferUpdate();
         await this.roleController.handleSelectMenu(interaction);
     } else if (interaction.customId === 'select_mapping_manage') {
+        await interaction.deferUpdate();
         await this.mappingController.handleSelectMenu(interaction);
     }
   }
@@ -146,12 +166,13 @@ export class MenuController {
       new ButtonBuilder().setCustomId('nav_servers').setLabel('Servers').setStyle(ButtonStyle.Secondary).setEmoji('🖥️')
     );
 
-    const payload = { embeds: [embed], components: [row1, row2], ephemeral: true };
+    const payload = { embeds: [embed], components: [row1, row2] };
 
     if (interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) {
-      await (interaction as any).update(payload);
+      if (!interaction.deferred && !interaction.replied) await interaction.update(payload);
+      else await interaction.editReply(payload);
     } else {
-      await interaction.reply(payload);
+      await interaction.reply({ ...payload, ephemeral: true });
     }
   }
 
@@ -190,6 +211,6 @@ export class MenuController {
       new ButtonBuilder().setCustomId('nav_back_main').setLabel('Back to Menu').setStyle(ButtonStyle.Secondary).setEmoji('⬅️')
     );
 
-    await interaction.update({ embeds: [embed], components: [row] });
+    await interaction.editReply({ embeds: [embed], components: [row] });
   }
 }

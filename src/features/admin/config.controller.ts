@@ -8,7 +8,9 @@ import {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  RepliableInteraction
+  RepliableInteraction,
+  StringSelectMenuBuilder,
+  StringSelectMenuInteraction
 } from 'discord.js';
 import { SystemConfigRepository } from '../../core/repositories/system-config.repository';
 import { configManager } from '../../core/config/config';
@@ -19,8 +21,11 @@ export class ConfigController {
     private onConfigReload: () => Promise<void>
   ) {}
 
-  async showEnvironmentPage(interaction: ButtonInteraction): Promise<void> {
+  async showEnvironmentPage(interaction: ButtonInteraction | RepliableInteraction | StringSelectMenuInteraction): Promise<void> {
     const config = configManager.get();
+    const engine = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'btch';
+    const autoDl = (await this.systemConfigRepo.get('AUTO_DOWNLOAD')) !== 'false';
+
     const embed = new EmbedBuilder()
       .setTitle('⚙️ Environment Configuration')
       .setColor(0x2b2d31)
@@ -30,15 +35,52 @@ export class ConfigController {
         { name: 'Fallback Channel', value: `\`${config.bot.fallbackChannelId}\``, inline: true },
         { name: 'Auto-Create Category', value: `\`${config.bot.autoCreateCategoryId}\``, inline: true },
         { name: 'Core Server', value: `\`${config.discord.coreServerId}\``, inline: true },
-        { name: 'DB Connections', value: `Min: ${config.database.minConnections} / Max: ${config.database.maxConnections}`, inline: true }
+        { name: 'DB Connections', value: `Min: ${config.database.minConnections} / Max: ${config.database.maxConnections}`, inline: true },
+        { name: '📥 Download Engine', value: engine, inline: true },
+        { name: '🤖 Auto Download', value: autoDl ? 'Enabled' : 'Disabled', inline: true }
       );
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('btn_edit_env').setLabel('Edit Config').setStyle(ButtonStyle.Primary).setEmoji('📝'),
+    const engineSelect = new StringSelectMenuBuilder()
+        .setCustomId('select_engine')
+        .setPlaceholder('Select Download Engine')
+        .addOptions([
+            { label: 'Btch Downloader', value: 'btch', default: engine === 'btch' },
+            { label: 'TobyG74 API', value: 'tobyg74', default: engine === 'tobyg74' },
+            { label: 'YT-DLP', value: 'yt-dlp', default: engine === 'yt-dlp' },
+            { label: 'Hans TikTok', value: 'hans', default: engine === 'hans' }
+        ]);
+
+    const rowSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(engineSelect);
+
+    const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('btn_edit_env').setLabel('Edit Env').setStyle(ButtonStyle.Primary).setEmoji('📝'),
+      new ButtonBuilder().setCustomId('btn_toggle_autodl').setLabel(autoDl ? 'Disable Auto DL' : 'Enable Auto DL').setStyle(autoDl ? ButtonStyle.Danger : ButtonStyle.Success),
       new ButtonBuilder().setCustomId('nav_back_main').setLabel('Back to Menu').setStyle(ButtonStyle.Secondary).setEmoji('⬅️')
     );
 
-    await interaction.update({ embeds: [embed], components: [row] });
+    const payload = { embeds: [embed], components: [rowSelect, rowButtons] };
+
+    // If interaction is deferred or component update, use editReply. If new, reply.
+    if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+        if (!interaction.deferred && !interaction.replied) await interaction.update(payload);
+        else await interaction.editReply(payload);
+    } else {
+        await (interaction as RepliableInteraction).reply({ ...payload, ephemeral: true });
+    }
+  }
+
+  async handleEngineSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+      await this.systemConfigRepo.set('DOWNLOAD_ENGINE', interaction.values[0]);
+      await this.onConfigReload();
+      await this.showEnvironmentPage(interaction);
+  }
+
+  async handleToggleAutoDl(interaction: ButtonInteraction): Promise<void> {
+      const current = await this.systemConfigRepo.get('AUTO_DOWNLOAD');
+      const newState = current === 'false' ? 'true' : 'false';
+      await this.systemConfigRepo.set('AUTO_DOWNLOAD', newState);
+      await this.onConfigReload();
+      await this.showEnvironmentPage(interaction);
   }
 
   async showEditModal(interaction: ButtonInteraction) {

@@ -88,15 +88,20 @@ export class QueueService {
           if (media.type === 'video') files.push({ attachment: media.buffer, name: `video.mp4` });
           else if (media.type === 'image') files.push({ attachment: media.buffer, name: `image.jpg` });
 
-          const MAX_SIZE = 25 * 1024 * 1024;
+          const MAX_SIZE = 24 * 1024 * 1024; // 24MB margin
           if (media.buffer.length > MAX_SIZE) {
              await (channel as any).send({ content: content + url, embeds: [embed] });
           } else {
-             await (channel as any).send({
-                content: content || undefined,
-                embeds: [embed],
-                files: files
-             });
+             try {
+                 await (channel as any).send({
+                    content: content || undefined,
+                    embeds: [embed],
+                    files: files
+                 });
+             } catch (sendError) {
+                 logger.warn('Failed to send file, falling back to link', { error: (sendError as Error).message });
+                 await (channel as any).send({ content: content + url, embeds: [embed] });
+             }
           }
       } else {
           await (channel as any).send({ content: content + url, embeds: [embed] });
