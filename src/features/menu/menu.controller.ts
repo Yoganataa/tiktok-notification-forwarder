@@ -69,6 +69,7 @@ export class MenuController {
         return;
     }
     if (id === 'btn_edit_env') {
+        // Do NOT deferUpdate here because showModal must be the first response
         await this.configController.showEditModal(interaction);
         return;
     }
@@ -83,7 +84,10 @@ export class MenuController {
             await interaction.deferUpdate();
             await this.roleController.showManager(interaction);
         }
-        else if (id === 'btn_add_staff') await this.roleController.showAddModal(interaction);
+        else if (id === 'btn_add_staff') {
+            // Do NOT deferUpdate here
+            await this.roleController.showAddModal(interaction);
+        }
         else {
              await interaction.deferUpdate();
              const parts = id.split('_');
@@ -97,11 +101,22 @@ export class MenuController {
             await interaction.deferUpdate();
             await this.mappingController.showManager(interaction);
         }
-        else if (id === 'btn_add_mapping') await this.mappingController.showAddModal(interaction);
+        else if (id === 'btn_add_mapping') {
+            // Do NOT deferUpdate here
+            await this.mappingController.showAddModal(interaction);
+        }
         else {
-             await interaction.deferUpdate();
              const parts = id.split('_');
-             await this.mappingController.handleButton(interaction, parts[2], parts[3]);
+             const action = parts[2];
+
+             // If action is edit, it shows a modal, so do NOT defer.
+             if (action === 'edit') {
+                 // Do NOT defer
+             } else {
+                 await interaction.deferUpdate();
+             }
+
+             await this.mappingController.handleButton(interaction, action, parts[3]);
         }
         return;
     }

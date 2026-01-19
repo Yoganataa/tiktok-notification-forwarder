@@ -90,6 +90,7 @@ export class QueueService {
 
           const MAX_SIZE = 24 * 1024 * 1024; // 24MB margin
           if (media.buffer.length > MAX_SIZE) {
+             logger.warn(`File too large (${(media.buffer.length/1024/1024).toFixed(2)}MB), falling back to link.`);
              await (channel as any).send({ content: content + url, embeds: [embed] });
           } else {
              try {
@@ -99,6 +100,7 @@ export class QueueService {
                     files: files
                  });
              } catch (sendError) {
+                 // Explicitly catch "Request entity too large" or other discord API errors
                  logger.warn('Failed to send file, falling back to link', { error: (sendError as Error).message });
                  await (channel as any).send({ content: content + url, embeds: [embed] });
              }
@@ -108,7 +110,8 @@ export class QueueService {
             await (channel as any).send({ content: content + url, embeds: [embed] });
           } catch (e) {
             logger.error('Failed to send fallback message', { error: (e as Error).message });
-            throw e; // Rethrow to mark as failed/retry
+            // If we can't even send the link, fail the job
+            throw e;
           }
       }
 

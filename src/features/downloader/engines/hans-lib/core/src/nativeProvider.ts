@@ -25,16 +25,19 @@ export class NativeProvider extends BaseProvider {
      */
     async fetch(
         url: string,
-        params: Record<string, string>,
+        params: Record<string, string> = {},
     ): Promise<ExtractedInfo> {
         const urlInstance = new URL(url);
+        // Fix: Use default user-agent if not provided to avoid 403/Bad Request
+        const userAgent = params['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
         const response = await getFetch(urlInstance.origin).get(
             `.${urlInstance.pathname}`,
             {
                 headers: {
                     Referer: urlInstance.href,
                     Origin: urlInstance.origin,
-                    'User-Agent': params['user-agent'],
+                    'User-Agent': userAgent,
                 },
                 timeout: {
                     socket: 10000,

@@ -27,13 +27,20 @@ export class YtDlpEngine implements DownloadEngine {
 
     return new Promise((resolve, reject) => {
         const chunks: Buffer[] = [];
-        const process = spawn(binaryPath, [url, '-o', '-', '--quiet']);
+        const process = spawn(binaryPath, [url, '-o', '-', '--quiet', '--no-warnings']);
+        let stderr = '';
 
         process.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
-        process.stderr.on('data', (chunk: Buffer) => console.error(`yt-dlp stderr: ${chunk}`));
+        process.stderr.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString();
+            console.error(`yt-dlp stderr: ${chunk}`);
+        });
 
         process.on('close', (code: number) => {
-            if (code !== 0) reject(new Error(`yt-dlp exited with code ${code}`));
+            if (code !== 0) {
+                // Ignore code 1 if we have some data, but yt-dlp usually doesn't output partially to stdout on failure
+                reject(new Error(`yt-dlp exited with code ${code}. Stderr: ${stderr}`));
+            }
             else {
                 resolve({
                     type: 'video',
