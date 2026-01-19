@@ -1,4 +1,4 @@
-import { ForwarderService } from '../services/forwarder.service';
+import { ForwarderService } from '../features/forwarder/forwarder.service';
 import { configManager } from '../core/config/config';
 import assert from 'assert';
 

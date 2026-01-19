@@ -1,12 +1,12 @@
 import { DownloadEngine, DownloadResult } from './types';
-import { Downloader } from './toby-lib/index';
+import TobyLib from './toby-lib/index';
 import { fetchBuffer } from '../../../shared/utils/network';
 
 export class TobyEngine implements DownloadEngine {
   name = 'tobyg74';
 
   async download(url: string): Promise<DownloadResult> {
-    const result = await Downloader(url, { version: 'v1' });
+    const result = await TobyLib.Downloader(url, { version: 'v1' });
     if (result.status !== 'success' || !result.result) {
        throw new Error(`Toby downloader failed: ${result.message}`);
     }

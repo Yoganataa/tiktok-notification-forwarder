@@ -1,6 +1,6 @@
 import { JSDOM, ResourceLoader } from "jsdom"
 import { _getUserLikedParams, _userSearchParams } from "../constants/params"
-import xbogus from "../../helper/xbogus"
+import xbogus from "../helper/xbogus"
 import { userAgent, webUserAgent } from "../constants/headers"
 import qs from "qs"
 import fs from "fs"

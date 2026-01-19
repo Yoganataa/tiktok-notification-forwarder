@@ -11,7 +11,7 @@ try { configManager.load(); } catch (e) { console.error(e); }
 // Mock SystemConfigRepository
 const mockRepo = {
     get: async (key: string) => {
-        if (key === 'DOWNLOAD_ENGINE') return 'hans';
+        if (key === 'DOWNLOAD_ENGINE') return 'tobyg74';
         return null;
     }
 } as any;
@@ -19,7 +19,7 @@ const mockRepo = {
 const service = new DownloaderService(mockRepo);
 
 async function test() {
-    console.log('Testing Hans Engine...');
+    console.log('Testing Toby Engine...');
     try {
         const result = await service.download('https://www.tiktok.com/@tiktok/video/7106679573887061294');
         console.log('Result:', result);

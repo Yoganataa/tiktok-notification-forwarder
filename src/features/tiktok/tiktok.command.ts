@@ -1,6 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
 import { DownloaderService } from '../downloader/downloader.service';
-import { Search, StalkUser } from '@tobyg74/tiktok-api-dl';
+import { Search, StalkUser } from '../downloader/engines/toby-lib/index';
 import { logger } from '../../shared/utils/logger';
 
 export const tiktokCommand = new SlashCommandBuilder()
