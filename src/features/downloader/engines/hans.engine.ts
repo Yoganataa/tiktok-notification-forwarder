@@ -4,14 +4,24 @@ import { fetchBuffer } from '../../../shared/utils/network';
 
 export class HansEngine implements DownloadEngine {
   name = 'hans';
+  private providerName: string = 'random';
+
+  setProvider(name: string) {
+      this.providerName = name;
+  }
 
   async download(url: string): Promise<DownloadResult> {
-    const provider = getProvider('random');
-    if (!provider) throw new Error('No provider available');
+    const provider = getProvider(this.providerName);
+    if (!provider) throw new Error(`Provider ${this.providerName} not found`);
+
     const result = await provider.fetch(url);
+    if ((result as any).error) throw new Error((result as any).error);
 
     if (result.video && result.video.urls && result.video.urls.length > 0) {
-        const videoUrl = result.video.urls[0];
+        // Try to find a valid URL that is not empty
+        const videoUrl = result.video.urls.find(u => u && u.startsWith('http'));
+        if (!videoUrl) throw new Error('No valid video URL found');
+
         const buffer = await fetchBuffer(videoUrl);
         return {
             type: 'video',

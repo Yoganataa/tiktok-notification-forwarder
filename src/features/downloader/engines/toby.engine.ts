@@ -4,9 +4,15 @@ import { fetchBuffer } from '../../../shared/utils/network';
 
 export class TobyEngine implements DownloadEngine {
   name = 'tobyg74';
+  private version: 'v1' | 'v2' | 'v3' = 'v1';
+
+  setVersion(v: 'v1' | 'v2' | 'v3') {
+      this.version = v;
+  }
 
   async download(url: string): Promise<DownloadResult> {
-    const result = await TobyLib.Downloader(url, { version: 'v1' });
+    const result = await TobyLib.Downloader(url, { version: this.version });
+
     if (result.status !== 'success' || !result.result) {
        throw new Error(`Toby downloader failed: ${result.message}`);
     }
@@ -23,14 +29,16 @@ export class TobyEngine implements DownloadEngine {
     }
 
     if (data.type === 'video' && data.video) {
-        const videoUrl = (data.video.downloadAddr && data.video.downloadAddr[0]) || (data.video.playAddr && data.video.playAddr[0]);
+        // Some providers return array, some object? Types say video: string[] | ...
+        const videoUrl = (Array.isArray(data.video) ? data.video[0] : data.video) as string;
+
         if (!videoUrl) throw new Error('No video URL');
 
         const buffer = await fetchBuffer(videoUrl);
         return {
             type: 'video',
             buffer,
-            urls: [videoUrl]
+            urls: Array.isArray(data.video) ? data.video : [videoUrl]
         };
     }
 

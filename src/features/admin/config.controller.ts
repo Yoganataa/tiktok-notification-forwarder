@@ -23,7 +23,7 @@ export class ConfigController {
 
   async showEnvironmentPage(interaction: ButtonInteraction | RepliableInteraction | StringSelectMenuInteraction): Promise<void> {
     const config = configManager.get();
-    const engine = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'btch';
+    const engineConfig = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'btch';
     const autoDl = (await this.systemConfigRepo.get('AUTO_DOWNLOAD')) !== 'false';
 
     const embed = new EmbedBuilder()
@@ -36,7 +36,7 @@ export class ConfigController {
         { name: 'Auto-Create Category', value: `\`${config.bot.autoCreateCategoryId}\``, inline: true },
         { name: 'Core Server', value: `\`${config.discord.coreServerId}\``, inline: true },
         { name: 'DB Connections', value: `Min: ${config.database.minConnections} / Max: ${config.database.maxConnections}`, inline: true },
-        { name: '📥 Download Engine', value: engine, inline: true },
+        { name: '📥 Download Engine', value: engineConfig, inline: true },
         { name: '🤖 Auto Download', value: autoDl ? 'Enabled' : 'Disabled', inline: true }
       );
 
@@ -44,10 +44,21 @@ export class ConfigController {
         .setCustomId('select_engine')
         .setPlaceholder('Select Download Engine')
         .addOptions([
-            { label: 'Btch Downloader', value: 'btch', default: engine === 'btch' },
-            { label: 'TobyG74 API', value: 'tobyg74', default: engine === 'tobyg74' },
-            { label: 'YT-DLP', value: 'yt-dlp', default: engine === 'yt-dlp' },
-            { label: 'Hans TikTok', value: 'hans', default: engine === 'hans' }
+            { label: 'Btch Downloader', value: 'btch', description: 'Default Engine', default: engineConfig === 'btch' },
+            { label: 'YT-DLP', value: 'yt-dlp', description: 'Reliable binary', default: engineConfig === 'yt-dlp' },
+
+            // TobyG74 Sub-engines
+            { label: 'TobyG74 (TiktokAPI/v1)', value: 'tobyg74:v1', description: 'TikW / Liber', default: engineConfig === 'tobyg74:v1' },
+            { label: 'TobyG74 (SSSTik/v2)', value: 'tobyg74:v2', description: 'SSSTik', default: engineConfig === 'tobyg74:v2' },
+            { label: 'TobyG74 (MusicalDown/v3)', value: 'tobyg74:v3', description: 'MusicalDown', default: engineConfig === 'tobyg74:v3' },
+
+            // Hans Sub-engines (Popular ones)
+            { label: 'Hans (Native)', value: 'hans:native', description: 'Direct Scraping', default: engineConfig === 'hans:native' },
+            { label: 'Hans (Snaptik)', value: 'hans:snaptik', description: 'Snaptik Provider', default: engineConfig === 'hans:snaptik' },
+            { label: 'Hans (Tikmate)', value: 'hans:tikmate', description: 'Tikmate Provider', default: engineConfig === 'hans:tikmate' },
+            { label: 'Hans (MusicalDown)', value: 'hans:musicalydown', description: 'MusicalyDown Provider', default: engineConfig === 'hans:musicalydown' },
+            { label: 'Hans (TTDownloader)', value: 'hans:ttdownloader', description: 'TTDownloader Provider', default: engineConfig === 'hans:ttdownloader' },
+            { label: 'Hans (FastTok)', value: 'hans:fasttoksave', description: 'FastTok Provider', default: engineConfig === 'hans:fasttoksave' },
         ]);
 
     const rowSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(engineSelect);
@@ -60,7 +71,6 @@ export class ConfigController {
 
     const payload = { embeds: [embed], components: [rowSelect, rowButtons] };
 
-    // If interaction is deferred or component update, use editReply. If new, reply.
     if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
         if (!interaction.deferred && !interaction.replied) await (interaction as any).update(payload);
         else await interaction.editReply(payload);

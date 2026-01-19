@@ -8,36 +8,40 @@ import { logger } from '../../shared/utils/logger';
 
 export class DownloaderService {
   private engines: Map<string, DownloadEngine> = new Map();
-  private systemConfig: SystemConfigRepository;
 
-  constructor(systemConfig: SystemConfigRepository) {
-    this.systemConfig = systemConfig;
-    this.register(new BtchEngine());
-    this.register(new TobyEngine());
-    this.register(new YtDlpEngine());
-    this.register(new HansEngine());
+  constructor(private configRepo: SystemConfigRepository) {
+    this.registerEngine(new BtchEngine());
+    this.registerEngine(new TobyEngine());
+    this.registerEngine(new YtDlpEngine());
+    this.registerEngine(new HansEngine());
   }
 
-  register(engine: DownloadEngine) {
+  registerEngine(engine: DownloadEngine) {
     this.engines.set(engine.name, engine);
   }
 
   async download(url: string): Promise<DownloadResult> {
-    const engineName = await this.systemConfig.get('DOWNLOAD_ENGINE') || 'btch';
-    const engine = this.engines.get(engineName) || this.engines.get('btch');
+    let engineName = await this.configRepo.get('DOWNLOAD_ENGINE') || 'btch';
+    // Format: "engine:subtype" e.g. "hans:snaptik" or "tobyg74:v2"
+    let subType = '';
 
-    if (!engine) throw new Error('No download engine available');
-
-    try {
-      logger.info(`Downloading using engine: ${engine.name}`);
-      return await engine.download(url);
-    } catch (error) {
-      logger.warn(`Engine ${engine.name} failed`, { error: (error as Error).message });
-      throw error;
+    if (engineName.includes(':')) {
+        [engineName, subType] = engineName.split(':');
     }
-  }
 
-  getEngineNames(): string[] {
-      return Array.from(this.engines.keys());
+    const engine = this.engines.get(engineName);
+    if (!engine) {
+      throw new Error(`Engine ${engineName} not found`);
+    }
+
+    // Configure sub-engine if applicable
+    if (engine instanceof HansEngine && subType) {
+        engine.setProvider(subType);
+    } else if (engine instanceof TobyEngine && subType) {
+        engine.setVersion(subType as 'v1' | 'v2' | 'v3');
+    }
+
+    logger.info(`Downloading using engine: ${engineName} (${subType || 'default'})`);
+    return await engine.download(url);
   }
 }
