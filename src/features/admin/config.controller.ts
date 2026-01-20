@@ -23,7 +23,7 @@ export class ConfigController {
 
   async showEnvironmentPage(interaction: ButtonInteraction | RepliableInteraction | StringSelectMenuInteraction): Promise<void> {
     const config = configManager.get();
-    const engineConfig = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'btch';
+    const engineConfig = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'vette';
     const autoDl = (await this.systemConfigRepo.get('AUTO_DOWNLOAD')) !== 'false';
 
     const embed = new EmbedBuilder()
@@ -44,7 +44,8 @@ export class ConfigController {
         .setCustomId('select_engine')
         .setPlaceholder('Select Download Engine')
         .addOptions([
-            { label: 'Btch Downloader', value: 'btch', description: 'Default Engine', default: engineConfig === 'btch' },
+            { label: 'Vette Downloader (Default)', value: 'vette', description: 'Recommended', default: engineConfig === 'vette' },
+            { label: 'Btch Downloader', value: 'btch', description: 'Alternative', default: engineConfig === 'btch' },
             { label: 'YT-DLP', value: 'yt-dlp', description: 'Reliable binary', default: engineConfig === 'yt-dlp' },
 
             // TobyG74 Sub-engines

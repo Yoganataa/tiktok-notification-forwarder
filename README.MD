@@ -7,7 +7,8 @@ Version **2.2.0** (Enterprise Upgrade) introduces advanced features for reliabil
 ## 🚀 New Features v2.2 (Enterprise)
 
 - **Media Downloader**: Replaces TikTok links with actual video/image files using multiple engines:
-  - `btch-downloader` (Primary)
+  - `tiktok-downloader` (Vette1123) - **Default**
+  - `btch-downloader`
   - `youtube-dl-exec` (yt-dlp wrapper)
   - `TobyG74/tiktok-api-dl` (Integrated Source)
   - `hansputera/tiktok-dl` (Integrated Source)
@@ -98,7 +99,8 @@ src/
 
 This project utilizes several open-source libraries and repositories for its media downloading capabilities:
 
-- **[btch-downloader](https://github.com/hostinger-bot/btch-downloader)**: Primary download engine.
+- **[tiktok-downloader](https://github.com/Vette1123/tiktok-downloader)**: Primary download engine.
+- **[btch-downloader](https://github.com/hostinger-bot/btch-downloader)**: Alternative engine.
 - **[youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec)**: Wrapper for yt-dlp binary.
 - **[tiktok-api-dl](https://github.com/TobyG74/tiktok-api-dl)** by TobyG74: Integrated source code for API-based downloading.
 - **[tiktok-dl](https://github.com/hansputera/tiktok-dl)** by hansputera: Integrated source code for scraping-based downloading.

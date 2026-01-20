@@ -26,18 +26,22 @@ SOFTWARE.
 
 This project includes code or utilizes libraries from the following repositories:
 
-1. **btch-downloader**
+1. **tiktok-downloader**
+   - Source: https://github.com/Vette1123/tiktok-downloader
+   - License: MIT
+
+2. **btch-downloader**
    - Source: https://github.com/hostinger-bot/btch-downloader
    - License: MIT
 
-2. **youtube-dl-exec**
+3. **youtube-dl-exec**
    - Source: https://github.com/microlinkhq/youtube-dl-exec
    - License: MIT
 
-3. **tiktok-api-dl**
+4. **tiktok-api-dl**
    - Source: https://github.com/TobyG74/tiktok-api-dl
    - License: ISC
 
-4. **tiktok-dl**
+5. **tiktok-dl**
    - Source: https://github.com/hansputera/tiktok-dl
    - License: MIT
