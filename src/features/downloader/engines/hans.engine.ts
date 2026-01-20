@@ -22,15 +22,15 @@ export class HansEngine implements DownloadEngine {
         const videoUrl = result.video.urls.find(u => u && u.startsWith('http'));
         if (!videoUrl) throw new Error('No valid video URL found');
 
-        // Check if content type is actually video or if it's a small error file
-        // Note: fetchBuffer does strict check? No, shared utils fetchBuffer just does arrayBuffer.
-        // We should probably check the buffer size or headers.
-
         const buffer = await fetchBuffer(videoUrl);
 
-        // If buffer is suspiciously small (< 5KB), it's likely an error page/corruption
-        if (buffer.length < 5000) {
-             throw new Error('Downloaded file is too small (likely corrupted or error page)');
+        // Check for small files (likely error pages)
+        if (buffer.length < 10000) { // 10KB
+             const content = buffer.toString('utf-8', 0, 100).toLowerCase();
+             if (content.includes('<!doctype html') || content.includes('<html') || content.includes('error') || content.includes('403 forbidden')) {
+                 throw new Error(`Provider returned an error page instead of video (${buffer.length} bytes)`);
+             }
+             throw new Error(`Downloaded file is suspicious/too small (${buffer.length} bytes)`);
         }
 
         return {
