@@ -6,12 +6,14 @@ export function validateUrl(url: string): boolean {
   // Support various TikTok URL formats
   const tiktokUrlPatterns = [
     /^(https?:\/\/)?(www\.)?tiktok\.com\/@[\w.-]+\/video\/\d+/,
-    /^(https?:\/\/)?(www\.)?tiktok\.com\/@[\w.-]+\/photo\/\d+/, // Added photo support
     /^(https?:\/\/)?(www\.)?tiktok\.com\/[\w.-]+\/video\/\d+/,
     /^(https?:\/\/)?vm\.tiktok\.com\/[\w\d]+/,
     /^(https?:\/\/)?vt\.tiktok\.com\/[\w\d]+/,
     /^(https?:\/\/)?m\.tiktok\.com\/v\/\d+/,
     /^(https?:\/\/)?(www\.)?tiktok\.com\/t\/[\w\d]+/,
+    // Photo/Slide support
+    /^(https?:\/\/)?(www\.)?tiktok\.com\/@[\w.-]+\/photo\/\d+/,
+    /^(https?:\/\/)?(www\.)?tiktok\.com\/[\w.-]+\/photo\/\d+/,
   ]
 
   return tiktokUrlPatterns.some((pattern) => pattern.test(url.trim()))
@@ -20,7 +22,7 @@ export function validateUrl(url: string): boolean {
 export function parseVideoId(url: string): string | null {
   const patterns = [
     /\/video\/(\d+)/,
-    /\/photo\/(\d+)/, // Added photo support
+    /\/photo\/(\d+)/,
     /\/v\/(\d+)/,
     /vm\.tiktok\.com\/([\w\d]+)/,
     /vt\.tiktok\.com\/([\w\d]+)/,

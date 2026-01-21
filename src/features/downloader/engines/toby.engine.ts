@@ -19,9 +19,6 @@ export class TobyEngine implements DownloadEngine {
 
     const data = result.result as any;
 
-    // Handle v3 (MusicalDown) which might use 'video' type but different properties
-    // or sometimes type 'image' but with 'images' array.
-
     if (data.type === 'image' && data.images && data.images.length > 0) {
        const buffer = await fetchBuffer(data.images[0]);
        return {
@@ -31,28 +28,22 @@ export class TobyEngine implements DownloadEngine {
        };
     }
 
-    // Try to find video URL in common fields across v1, v2, v3
     let videoUrl: string | undefined;
 
     if (data.type === 'video') {
-        if (this.version === 'v1') { // TiktokAPI
-             // data.video is object Video
+        if (this.version === 'v1') {
              if (data.video?.downloadAddr && data.video.downloadAddr.length > 0) videoUrl = data.video.downloadAddr[0];
              else if (data.video?.playAddr && data.video.playAddr.length > 0) videoUrl = data.video.playAddr[0];
-        } else if (this.version === 'v2') { // SSSTik
-             // data.video is object { playAddr: string[] }
+        } else if (this.version === 'v2') {
              if (data.video?.playAddr && data.video.playAddr.length > 0) videoUrl = data.video.playAddr[0];
-        } else if (this.version === 'v3') { // MusicalDown
-             // data has videoHD, videoSD, videoWatermark direct properties
+        } else if (this.version === 'v3') {
              videoUrl = data.videoHD || data.videoSD || data.videoWatermark;
         }
     } else if (data.type === 'music') {
-         // Fallback if it detected as music but we want video? Or just fail.
          throw new Error('Media is audio only');
     }
 
     if (!videoUrl && data.video) {
-        // Fallback generic extraction if structure unknown
         if (typeof data.video === 'string') videoUrl = data.video;
         else if (Array.isArray(data.video)) videoUrl = data.video[0];
     }

@@ -25,11 +25,9 @@ export class Downloader {
       try {
         const result = await method()
         if (result) {
-          console.log('Successfully downloaded video using method')
           return result
         }
       } catch (error) {
-        console.warn('Method failed, trying next...', error)
         continue
       }
     }
@@ -41,12 +39,10 @@ export class Downloader {
 
   private async trySnaptikMethod(url: string): Promise<VideoData | null> {
     try {
-      // Step 1: Get the main page to extract necessary tokens
       await axios.get('https://snaptik.app/', {
         headers: { 'User-Agent': this.userAgent },
       })
 
-      // Step 2: Submit the URL
       const formData = new URLSearchParams()
       formData.append('url', url)
 
@@ -66,8 +62,6 @@ export class Downloader {
 
       if (response.data && typeof response.data === 'string') {
         const $ = cheerio.load(response.data)
-
-        // Look for download links
         const downloadLinks: string[] = []
         $('a[href*=".mp4"], a[download*=".mp4"]').each((_, element) => {
           const href = $(element).attr('href')
@@ -86,7 +80,7 @@ export class Downloader {
             duration: 0,
             author: 'Unknown',
             description: 'Downloaded via Snaptik',
-            downloadUrl: downloadLinks[0], // Use the first (usually highest quality) link
+            downloadUrl: downloadLinks[0],
           }
         }
       }
@@ -163,7 +157,6 @@ export class Downloader {
         const data = response.data.data
         const videoId = parseVideoId(url) || 'unknown'
 
-        // Check if this is a photo carousel (slideshow)
         const isPhotoCarousel =
           data.images && Array.isArray(data.images) && data.images.length > 0
 
@@ -176,10 +169,7 @@ export class Downloader {
           }))
         }
 
-        // Get the video URL and make it absolute if it's relative
         let downloadUrl = data.hdplay || data.play || data.wmplay
-
-        // If the URL is relative, make it absolute
         if (downloadUrl && downloadUrl.startsWith('/')) {
           downloadUrl = 'https://www.tikwm.com' + downloadUrl
         }
@@ -207,7 +197,6 @@ export class Downloader {
     url: string
   ): Promise<VideoData | null> {
     try {
-      // First resolve any shortened URLs
       const resolvedUrl = await this.resolveUrl(url)
 
       const response = await axios.get(resolvedUrl, {
@@ -223,16 +212,12 @@ export class Downloader {
         timeout: 30000,
       })
 
-      // Parse TikTok's page for video data
       const $ = cheerio.load(response.data)
-
-      // Look for JSON data in script tags
       const scripts = $('script').toArray()
       for (const script of scripts) {
         const content = $(script).html()
         if (content && content.includes('webapp.video-detail')) {
           try {
-            // Extract video URLs from the script content
             const videoUrlMatch = content.match(/"playAddr":"([^"]+)"/)
             const downloadUrlMatch = content.match(/"downloadAddr":"([^"]+)"/)
 
@@ -278,7 +263,7 @@ export class Downloader {
         return response.request.res.responseUrl || url
       }
     } catch {
-      // If resolve fails, return original URL
+      // Ignore
     }
     return url
   }

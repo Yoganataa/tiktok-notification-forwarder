@@ -14,12 +14,13 @@ export class VetteEngine implements DownloadEngine {
         const result = await this.downloader.downloadVideo(url);
 
         if (!result) {
-            throw new Error('Failed to download video');
+            throw new Error('Failed to download video (Vette)');
         }
 
-        // Check for photo carousel first (similar to API logic)
-        if (result.images && result.images.length > 0) {
-             const buffer = await fetchBuffer(result.images[0].url);
+        // Check for photo carousel first
+        if (result.isPhotoCarousel && result.images && result.images.length > 0) {
+             const firstImage = result.images[0];
+             const buffer = await fetchBuffer(firstImage.url);
              return {
                  type: 'image',
                  buffer,
@@ -38,7 +39,7 @@ export class VetteEngine implements DownloadEngine {
              };
         }
 
-        throw new Error('No media found in response');
+        throw new Error('No media found in Vette response');
 
     } catch (error) {
         logger.error(`[VetteEngine] Error: ${(error as Error).message}`);

@@ -45,11 +45,8 @@ class Application {
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMessageReactions,
       ],
-      presence: {
-        activities: [{ name: 'TikTok notifications', type: ActivityType.Watching }],
-        status: 'online',
-      },
     });
 
     const userMappingRepo = new UserMappingRepository();
@@ -78,15 +75,13 @@ class Application {
     try {
       logger.info('🚀 Starting TikTok Notification Forwarder Bot...');
 
-      // Initialize startup tasks (download binaries etc)
       await StartupService.init();
 
       await database.connect({
         driver: this.config.database.driver,
         connectionString: this.config.database.url,
-        ssl: this.config.database.ssl,
         maxConnections: this.config.database.maxConnections,
-        minConnections: this.config.database.minConnections,
+        minConnections: this.config.database.minConnections
       });
 
       const migrationService = new MigrationService();
@@ -94,7 +89,6 @@ class Application {
 
       await this.configManagerReload();
 
-      // Start Queue Worker
       setInterval(() => this.queueService.processQueue(this.client), 5000);
 
       await this.client.login(this.config.discord.token);
@@ -102,31 +96,26 @@ class Application {
       logger.error('❌ Critical failure during application startup', {
         error: (error as Error).message
       });
-      await this.shutdown(1);
+      process.exit(1);
     }
   }
 
   private async configManagerReload(): Promise<void> {
     try {
       await configManager.loadFromDatabase(this.systemConfigRepo);
-      this.config = configManager.get();
+      logger.info('Configuration reloaded from database');
     } catch (error) {
-      logger.error('Failed to synchronize dynamic configuration', {
-        error: (error as Error).message
-      });
+      logger.error('Failed to load dynamic config', { error: (error as Error).message });
     }
   }
 
   private setupEventHandlers(): void {
     this.client.once(Events.ClientReady, async (readyClient) => {
       logger.info(`✅ Bot authenticated as ${readyClient.user.tag}`);
-      try {
-        await this.registerCommands();
-        await this.logServerInfo();
-        logger.info('✨ Initialization complete. Bot is ready.');
-      } catch (error) {
-        logger.error('Post-login initialization failed', { error: (error as Error).message });
-      }
+      await this.registerCommands();
+      await this.logServerInfo();
+
+      this.client.user?.setActivity('TikTok Live', { type: ActivityType.Watching });
     });
 
     this.client.on(Events.MessageCreate, async (message) => {
@@ -198,13 +187,16 @@ class Application {
   private async logServerInfo(): Promise<void> {
     try {
       const guilds = await this.client.guilds.fetch();
+      const config = configManager.get();
+
       logger.info(`Guild Access: Active in ${guilds.size} servers`);
+
       for (const [id, guild] of guilds) {
-        const fullGuild = await guild.fetch();
-        logger.info(`- ${fullGuild.name} (${fullGuild.id}) | Core: ${id === this.config.discord.coreServerId}`);
+        const isCore = id === config.discord.coreServerId;
+        logger.info(`- ${guild.name} (${id}) | Core: ${isCore}`);
       }
     } catch (error) {
-      logger.warn('Failed to fetch detailed server information', { error: (error as Error).message });
+      logger.warn('Could not fetch guild list');
     }
   }
 
@@ -212,14 +204,15 @@ class Application {
     if (this.isShuttingDown) return;
     this.isShuttingDown = true;
 
-    logger.info('Initiating graceful shutdown...', { exitCode });
+    logger.info('Initiating graceful shutdown...');
+
     try {
-      await database.disconnect();
       this.client.destroy();
-      logger.info('Graceful shutdown completed successfully.');
+      await database.disconnect();
+      logger.info('Shutdown complete.');
       process.exit(exitCode);
     } catch (error) {
-      logger.error('Error during shutdown procedure', { error: (error as Error).message });
+      console.error('Error during shutdown:', error);
       process.exit(1);
     }
   }
@@ -234,7 +227,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception', { error: error.message });
+  logger.error('Uncaught Exception', { error: error.message, stack: error.stack });
   app.shutdown(1);
 });
 

@@ -23,6 +23,7 @@ export async function handleTikTokCommand(interaction: ChatInputCommandInteracti
     const subcommand = interaction.options.getSubcommand();
     await interaction.deferReply();
 
+    // Use dynamic import or simple instantiation if possible, mainly we need config repo
     const { SystemConfigRepository } = require('../../core/repositories/system-config.repository');
     const service = new DownloaderService(new SystemConfigRepository());
 
@@ -36,19 +37,18 @@ export async function handleTikTokCommand(interaction: ChatInputCommandInteracti
             if (result.type === 'video' && result.buffer) files.push({ attachment: result.buffer, name: 'video.mp4' });
             else if (result.type === 'image' && result.buffer) files.push({ attachment: result.buffer, name: 'image.jpg' });
 
-            const MAX_SIZE = 25 * 1024 * 1024;
+            const MAX_SIZE = 24 * 1024 * 1024; // ~24MB
             if (result.buffer && result.buffer.length > MAX_SIZE) {
                 await interaction.editReply(`File too large (>25MB). [Link](${url})`);
             } else {
                 await interaction.editReply({ content: `Download successful!`, files });
             }
         } else if (subcommand === 'stalk') {
-            if (!process.env.COOKIE) {
-                await interaction.editReply('❌ Cookie not configured. Stalk feature disabled.');
-                return;
-            }
             const username = interaction.options.getString('username', true);
+            // StalkUser does not strictly require cookie for basic info in v1/v2 but v3 might.
+            // Using TobyLib directly
             const result = await TobyLib.StalkUser(username);
+
             if (result.status === 'success' && result.result) {
                 const user = result.result.user;
                 const stats = result.result.stats;
@@ -73,12 +73,13 @@ export async function handleTikTokCommand(interaction: ChatInputCommandInteracti
                 await interaction.editReply('User not found or error fetching data.');
             }
         } else if (subcommand === 'search') {
-            if (!process.env.COOKIE) {
-                await interaction.editReply('❌ Cookie not configured. Search feature disabled.');
+             if (!process.env.COOKIE) {
+                await interaction.editReply('❌ Cookie not configured in .env. Search disabled.');
                 return;
             }
             const query = interaction.options.getString('query', true);
             const result = await TobyLib.Search(query, { type: 'user', page: 1, cookie: process.env.COOKIE });
+
             if (result.status === 'success' && result.result && Array.isArray(result.result) && result.result.length > 0) {
                 const users = result.result.slice(0, 5).map((u: any) => `• **${u.nickname}** (@${u.username}) - ${u.followerCount} followers`).join('\n');
                 await interaction.editReply(`Search results for "${query}":\n${users}`);
