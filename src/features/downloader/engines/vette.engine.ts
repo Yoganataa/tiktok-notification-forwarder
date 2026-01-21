@@ -1,4 +1,4 @@
-import { DownloadEngine, DownloadResult } from '../types';
+import { DownloadEngine, DownloadResult } from './types';
 import { fetchBuffer } from '../../../shared/utils/network';
 import { logger } from '../../../shared/utils/logger';
 import { Downloader } from './vette-lib/downloader';
