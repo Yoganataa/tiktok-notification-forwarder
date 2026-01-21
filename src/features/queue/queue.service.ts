@@ -83,27 +83,43 @@ export class QueueService {
         content = `<@&${roleId}> `;
       }
 
-      if (media && media.buffer) {
-          const files = [];
-          if (media.type === 'video') files.push({ attachment: media.buffer, name: `video.mp4` });
-          else if (media.type === 'image') files.push({ attachment: media.buffer, name: `image.jpg` });
+      if (media) {
+          const files: any[] = [];
 
-          const MAX_SIZE = 24 * 1024 * 1024; // 24MB margin
-          if (media.buffer.length > MAX_SIZE) {
-             logger.warn(`File too large (${(media.buffer.length/1024/1024).toFixed(2)}MB), falling back to link.`);
-             await (channel as any).send({ content: content + url, embeds: [embed] });
-          } else {
-             try {
-                 await (channel as any).send({
-                    content: content || undefined,
-                    embeds: [embed],
-                    files: files
-                 });
-             } catch (sendError) {
-                 // Explicitly catch "Request entity too large" or other discord API errors
-                 logger.warn('Failed to send file, falling back to link', { error: (sendError as Error).message });
+          if (media.type === 'video' && media.buffer) {
+              files.push({ attachment: media.buffer, name: 'video.mp4' });
+          } else if (media.type === 'image') {
+              if (media.buffers && media.buffers.length > 0) {
+                  media.buffers.forEach((buf: Buffer, index: number) => {
+                      files.push({ attachment: buf, name: `image_${index + 1}.jpg` });
+                  });
+              } else if (media.buffer) {
+                  files.push({ attachment: media.buffer, name: 'image.jpg' });
+              }
+          }
+
+          if (files.length > 0) {
+              const totalSize = files.reduce((acc, file) => acc + file.attachment.length, 0);
+              const MAX_SIZE = 24 * 1024 * 1024; // 24MB margin
+
+              if (totalSize > MAX_SIZE) {
+                 logger.warn(`Total file size too large (${(totalSize/1024/1024).toFixed(2)}MB), falling back to link.`);
                  await (channel as any).send({ content: content + url, embeds: [embed] });
-             }
+              } else {
+                 try {
+                     await (channel as any).send({
+                        content: content || undefined,
+                        embeds: [embed],
+                        files: files
+                     });
+                 } catch (sendError) {
+                     logger.warn('Failed to send file, falling back to link', { error: (sendError as Error).message });
+                     await (channel as any).send({ content: content + url, embeds: [embed] });
+                 }
+              }
+          } else {
+              // No files found (media object existed but no buffer?), fallback
+               await (channel as any).send({ content: content + url, embeds: [embed] });
           }
       } else {
           try {

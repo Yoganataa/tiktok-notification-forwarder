@@ -33,13 +33,24 @@ export async function handleTikTokCommand(interaction: ChatInputCommandInteracti
 
             const result = await service.download(url);
 
-            const files = [];
-            if (result.type === 'video' && result.buffer) files.push({ attachment: result.buffer, name: 'video.mp4' });
-            else if (result.type === 'image' && result.buffer) files.push({ attachment: result.buffer, name: 'image.jpg' });
+            const files: any[] = [];
+            if (result.type === 'video' && result.buffer) {
+                files.push({ attachment: result.buffer, name: 'video.mp4' });
+            } else if (result.type === 'image') {
+                if (result.buffers && result.buffers.length > 0) {
+                    result.buffers.forEach((buf, i) => files.push({ attachment: buf, name: `image_${i+1}.jpg` }));
+                } else if (result.buffer) {
+                    files.push({ attachment: result.buffer, name: 'image.jpg' });
+                }
+            }
 
+            const totalSize = files.reduce((acc, f) => acc + f.attachment.length, 0);
             const MAX_SIZE = 24 * 1024 * 1024; // ~24MB
-            if (result.buffer && result.buffer.length > MAX_SIZE) {
-                await interaction.editReply(`File too large (>25MB). [Link](${url})`);
+
+            if (totalSize > MAX_SIZE) {
+                await interaction.editReply(`Files too large (>25MB). [Link](${url})`);
+            } else if (files.length === 0) {
+                 await interaction.editReply(`No media found. [Link](${url})`);
             } else {
                 await interaction.editReply({ content: `Download successful!`, files });
             }

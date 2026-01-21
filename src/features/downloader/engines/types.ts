@@ -1,6 +1,7 @@
 export interface DownloadResult {
   type: 'video' | 'image';
   buffer?: Buffer;
+  buffers?: Buffer[]; // Added to support multiple images
   url?: string;
   urls: string[];
 }
