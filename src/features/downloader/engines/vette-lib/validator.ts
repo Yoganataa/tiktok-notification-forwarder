@@ -6,6 +6,7 @@ export function validateUrl(url: string): boolean {
   // Support various TikTok URL formats
   const tiktokUrlPatterns = [
     /^(https?:\/\/)?(www\.)?tiktok\.com\/@[\w.-]+\/video\/\d+/,
+    /^(https?:\/\/)?(www\.)?tiktok\.com\/@[\w.-]+\/photo\/\d+/, // Added photo support
     /^(https?:\/\/)?(www\.)?tiktok\.com\/[\w.-]+\/video\/\d+/,
     /^(https?:\/\/)?vm\.tiktok\.com\/[\w\d]+/,
     /^(https?:\/\/)?vt\.tiktok\.com\/[\w\d]+/,
@@ -19,6 +20,7 @@ export function validateUrl(url: string): boolean {
 export function parseVideoId(url: string): string | null {
   const patterns = [
     /\/video\/(\d+)/,
+    /\/photo\/(\d+)/, // Added photo support
     /\/v\/(\d+)/,
     /vm\.tiktok\.com\/([\w\d]+)/,
     /vt\.tiktok\.com\/([\w\d]+)/,

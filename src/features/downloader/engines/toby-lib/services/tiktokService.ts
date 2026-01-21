@@ -22,11 +22,13 @@ export class TiktokService {
     const { window } = new JSDOM(``, jsdomOptions)
     let _window = window
     _window.eval(this.signaturejs.toString())
+    // @ts-ignore
     _window.byted_acrawler.init({
       aid: 24,
       dfp: true
     })
     _window.eval(this.webmssdk)
+    // @ts-ignore
     const signature = _window.byted_acrawler.sign({ url: stringUrl })
     return signature
   }
@@ -44,6 +46,7 @@ export class TiktokService {
     const { window } = new JSDOM(``, jsdomOptions)
     let _window = window
     _window.eval(this.signaturejs.toString())
+    // @ts-ignore
     _window.byted_acrawler.init({
       aid: 24,
       dfp: true
@@ -52,6 +55,7 @@ export class TiktokService {
     if (signature) {
       url.searchParams.append("_signature", signature)
     }
+    // @ts-ignore
     const xbogus = _window._0x32d649(url.searchParams.toString())
     return xbogus
   }
@@ -103,7 +107,9 @@ export class TiktokService {
     }
   }
 
-  private static readonly FILE_PATH = path.join(__dirname, "../../helper")
+  // Fixed path: points to ../helper relative to this file (src/features/downloader/engines/toby-lib/services/tiktokService.ts)
+  // which resolves to src/features/downloader/engines/toby-lib/helper
+  private static readonly FILE_PATH = path.join(__dirname, "../helper")
   private static readonly BASE_URL = "https://www.tiktok.com/"
   private static readonly AES_KEY = "webapp1.0+202106"
   private static readonly AES_IV = "webapp1.0+202106"
