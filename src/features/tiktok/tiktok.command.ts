@@ -2,6 +2,7 @@ import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from '
 import { DownloaderService } from '../downloader/downloader.service';
 import TobyLib from '../downloader/engines/toby-lib/index';
 import { logger } from '../../shared/utils/logger';
+import { sendChunkedReply } from '../../shared/utils/discord-chunker';
 
 export const tiktokCommand = new SlashCommandBuilder()
   .setName('tiktok')
@@ -44,15 +45,15 @@ export async function handleTikTokCommand(interaction: ChatInputCommandInteracti
                 }
             }
 
-            const totalSize = files.reduce((acc, f) => acc + f.attachment.length, 0);
             const MAX_SIZE = 24 * 1024 * 1024; // ~24MB
+            const anyFileTooLarge = files.some(f => f.attachment.length > MAX_SIZE);
 
-            if (totalSize > MAX_SIZE) {
-                await interaction.editReply(`Files too large (>25MB). [Link](${url})`);
+            if (anyFileTooLarge) {
+                await interaction.editReply(`One or more files too large (>25MB). [Link](${url})`);
             } else if (files.length === 0) {
                  await interaction.editReply(`No media found. [Link](${url})`);
             } else {
-                await interaction.editReply({ content: `Download successful!`, files });
+                await sendChunkedReply(interaction, `Download successful!`, [], files);
             }
         } else if (subcommand === 'stalk') {
             const username = interaction.options.getString('username', true);

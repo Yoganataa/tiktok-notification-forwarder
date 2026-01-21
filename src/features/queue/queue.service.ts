@@ -5,6 +5,7 @@ import { NotificationService } from '../notification/notification.service';
 import { SystemConfigRepository } from '../../core/repositories/system-config.repository';
 import { logger } from '../../shared/utils/logger';
 import { NotificationData, ForwardConfig } from '../../core/types';
+import { sendChunkedMessage } from '../../shared/utils/discord-chunker';
 
 export interface QueuePayload {
   url: string;
@@ -99,21 +100,23 @@ export class QueueService {
           }
 
           if (files.length > 0) {
-              const totalSize = files.reduce((acc, file) => acc + file.attachment.length, 0);
               const MAX_SIZE = 24 * 1024 * 1024; // 24MB margin
+              // Check total size is complex with chunking. We should check if ANY file is > 25MB individually,
+              // or rely on chunking to handle quantity.
+              // However, Discord 25MB limit is PER MESSAGE.
+              // So simplistic total check might block valid chunkable content.
+              // Let's check individual file sizes.
 
-              if (totalSize > MAX_SIZE) {
-                 logger.warn(`Total file size too large (${(totalSize/1024/1024).toFixed(2)}MB), falling back to link.`);
+              const anyFileTooLarge = files.some(f => f.attachment.length > MAX_SIZE);
+
+              if (anyFileTooLarge) {
+                 logger.warn(`One or more files too large (>24MB), falling back to link.`);
                  await (channel as any).send({ content: content + url, embeds: [embed] });
               } else {
                  try {
-                     await (channel as any).send({
-                        content: content || undefined,
-                        embeds: [embed],
-                        files: files
-                     });
+                     await sendChunkedMessage(channel as any, content || undefined, [embed], files);
                  } catch (sendError) {
-                     logger.warn('Failed to send file, falling back to link', { error: (sendError as Error).message });
+                     logger.warn('Failed to send file(s), falling back to link', { error: (sendError as Error).message });
                      await (channel as any).send({ content: content + url, embeds: [embed] });
                  }
               }
