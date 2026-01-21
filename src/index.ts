@@ -12,6 +12,7 @@ import { handleMenuCommand } from './features/menu/menu.command';
 import { handleAdminCommand } from './features/admin/admin.command';
 import { handleTikTokCommand, tiktokCommand } from './features/tiktok/tiktok.command';
 import { startCommand, handleStartCommand } from './features/start/start.command';
+import { reforgotCommand, handleReforgotCommand } from './features/admin/reforgot.command';
 import { MenuController } from './features/menu/menu.controller';
 
 // Services & Repositories
@@ -145,7 +146,8 @@ class Application {
   }
 
   private async handleSlashCommand(interaction: any) {
-    if (interaction.guildId !== this.config.discord.coreServerId) {
+    // Only block commands if it's NOT the 'reforgot' command
+    if (interaction.commandName !== 'reforgot' && interaction.guildId !== this.config.discord.coreServerId) {
         await interaction.reply({ content: '⛔ Commands are only available in the Core Server.', ephemeral: true });
         return;
     }
@@ -156,6 +158,7 @@ class Application {
       case 'admin': await handleAdminCommand(interaction, this.permissionService); break;
       case 'tiktok': await handleTikTokCommand(interaction); break;
       case 'start': await handleStartCommand(interaction); break;
+      case 'reforgot': await handleReforgotCommand(interaction, this.permissionService, this.forwarderService); break;
     }
   }
 
@@ -167,15 +170,18 @@ class Application {
           ...commandList.map((cmd) => cmd.toJSON()),
           startCommand.toJSON(),
           mappingCommand.toJSON(),
-          tiktokCommand.toJSON()
+          tiktokCommand.toJSON(),
+          reforgotCommand.toJSON()
       ];
 
       const uniqueCommands = Array.from(new Map(commandsBody.map(cmd => [cmd.name, cmd])).values());
 
       logger.info('Updating global slash commands...', { count: uniqueCommands.length });
 
-      await rest.put(Routes.applicationCommands(this.config.discord.clientId), { body: [] });
+      // Register ALL commands globally to ensure /reforgot works everywhere
+      await rest.put(Routes.applicationCommands(this.config.discord.clientId), { body: uniqueCommands });
 
+      // Also register to Core Server for immediate update (Discord global commands take time)
       if (this.config.discord.coreServerId) {
         await rest.put(Routes.applicationGuildCommands(this.config.discord.clientId, this.config.discord.coreServerId), { body: uniqueCommands });
       }
