@@ -1,6 +1,6 @@
 import { DownloadEngine, DownloadResult } from '../types';
-import { fetchBuffer } from '../../../../shared/utils/network';
-import { logger } from '../../../../shared/utils/logger';
+import { fetchBuffer } from '../../../shared/utils/network';
+import { logger } from '../../../shared/utils/logger';
 import { Downloader } from './vette-lib/downloader';
 
 export class VetteEngine implements DownloadEngine {
@@ -17,8 +17,8 @@ export class VetteEngine implements DownloadEngine {
             throw new Error('Failed to download video');
         }
 
-        // Check for photo carousel first
-        if (result.isPhotoCarousel && result.images && result.images.length > 0) {
+        // Check for photo carousel first (similar to API logic)
+        if (result.images && result.images.length > 0) {
              const buffer = await fetchBuffer(result.images[0].url);
              return {
                  type: 'image',
