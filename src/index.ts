@@ -1,45 +1,43 @@
-// src/index.ts
+import 'dotenv/config';
 import { Client, GatewayIntentBits, Events, REST, Routes, ActivityType } from 'discord.js';
 import { database } from './core/database/connection';
 import { configManager } from './core/config/config';
-import { logger } from './utils/logger';
-import { handleInteractionError } from './utils/error-handler';
-import { commandList } from './commands';
+import { logger } from './shared/utils/logger';
+import { handleInteractionError } from './shared/utils/error-handler';
+import { commandList } from './features/commands.registry';
 
-// Controllers
-import { handleMappingCommand } from './commands/mapping.command';
-import { handleMenuCommand } from './commands/menu.command';
-import { handleAdminCommand } from './commands/admin.command';
-import { AdminController } from './controllers/admin.controller';
+// Controllers & Handlers
+import { handleMappingCommand, mappingCommand } from './features/mapping/mapping.command';
+import { handleMenuCommand } from './features/menu/menu.command';
+import { handleAdminCommand } from './features/admin/admin.command';
+import { handleTikTokCommand, tiktokCommand } from './features/tiktok/tiktok.command';
+import { startCommand, handleStartCommand } from './features/start/start.command';
+import { reforgotCommand, handleReforgotCommand } from './features/admin/reforgot.command';
+import { MenuController } from './features/menu/menu.controller';
 
 // Services & Repositories
-import { UserMappingRepository } from './repositories/user-mapping.repository';
-import { AccessControlRepository } from './repositories/access-control.repository';
-import { SystemConfigRepository } from './repositories/system-config.repository';
-import { PermissionService } from './services/permission.service';
-import { NotificationService } from './services/notification.service';
-import { ForwarderService } from './services/forwarder.service';
-import { MigrationService } from './services/migration.service';
+import { UserMappingRepository } from './core/repositories/user-mapping.repository';
+import { AccessControlRepository } from './core/repositories/access-control.repository';
+import { SystemConfigRepository } from './core/repositories/system-config.repository';
+import { QueueRepository } from './core/repositories/queue.repository';
+import { PermissionService } from './features/admin/permission.service';
+import { NotificationService } from './features/notification/notification.service';
+import { ForwarderService } from './features/forwarder/forwarder.service';
+import { QueueService } from './features/queue/queue.service';
+import { DownloaderService } from './features/downloader/downloader.service';
+import { MigrationService } from './core/services/migration.service';
+import { StartupService } from './core/services/startup.service';
 
-/**
- * Main Application Class.
- * * Responsible for managing the bot lifecycle, dependency injection, 
- * event routing, and database connections.
- */
 class Application {
   private client: Client;
   private config: ReturnType<typeof configManager.get>;
   private forwarderService: ForwarderService;
+  private queueService: QueueService;
   private permissionService: PermissionService;
-  private adminController: AdminController;
+  private menuController: MenuController;
   private systemConfigRepo: SystemConfigRepository;
   private isShuttingDown = false;
 
-  /**
-   * Initializes the Application instance.
-   * Sets up the Discord client, loads configuration, and instantiates
-   * necessary repositories, services, and controllers.
-   */
   constructor() {
     this.config = configManager.load();
 
@@ -48,22 +46,23 @@ class Application {
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMessageReactions,
       ],
-      presence: {
-        activities: [{ name: 'TikTok notifications', type: ActivityType.Watching }],
-        status: 'online',
-      },
     });
 
     const userMappingRepo = new UserMappingRepository();
     const accessControlRepo = new AccessControlRepository();
     this.systemConfigRepo = new SystemConfigRepository();
 
-    this.permissionService = new PermissionService(accessControlRepo);
+    const queueRepo = new QueueRepository();
+    const downloaderService = new DownloaderService(this.systemConfigRepo);
     const notificationService = new NotificationService(userMappingRepo);
-    this.forwarderService = new ForwarderService(notificationService);
+    this.queueService = new QueueService(queueRepo, downloaderService, notificationService, this.systemConfigRepo);
 
-    this.adminController = new AdminController(
+    this.permissionService = new PermissionService(accessControlRepo);
+    this.forwarderService = new ForwarderService(notificationService, this.queueService, userMappingRepo);
+
+    this.menuController = new MenuController(
       this.permissionService,
       this.systemConfigRepo,
       userMappingRepo,
@@ -73,22 +72,17 @@ class Application {
     this.setupEventHandlers();
   }
 
-  /**
-   * Starts the application lifecycle.
-   * * This method establishes the database connection, runs migrations,
-   * synchronizes configuration, and logs in the Discord client.
-   */
   async start(): Promise<void> {
     try {
       logger.info('🚀 Starting TikTok Notification Forwarder Bot...');
 
-      // PERBAIKAN DI SINI: Menambahkan properti 'driver'
+      await StartupService.init();
+
       await database.connect({
-        driver: this.config.database.driver, 
+        driver: this.config.database.driver,
         connectionString: this.config.database.url,
-        ssl: this.config.database.ssl,
         maxConnections: this.config.database.maxConnections,
-        minConnections: this.config.database.minConnections,
+        minConnections: this.config.database.minConnections
       });
 
       const migrationService = new MigrationService();
@@ -96,50 +90,37 @@ class Application {
 
       await this.configManagerReload();
 
+      setInterval(() => this.queueService.processQueue(this.client), 5000);
+
       await this.client.login(this.config.discord.token);
     } catch (error) {
-      logger.error('❌ Critical failure during application startup', { 
-        error: (error as Error).message 
+      logger.error('❌ Critical failure during application startup', {
+        error: (error as Error).message
       });
-      await this.shutdown(1);
+      process.exit(1);
     }
   }
 
-  /**
-   * Synchronizes in-memory configuration with database values.
-   * * Ensures that dynamic changes made via the Admin Panel are applied immediately
-   * without requiring a full restart.
-   */
   private async configManagerReload(): Promise<void> {
     try {
       await configManager.loadFromDatabase(this.systemConfigRepo);
-      this.config = configManager.get();
+      logger.info('Configuration reloaded from database');
     } catch (error) {
-      logger.error('Failed to synchronize dynamic configuration', { 
-        error: (error as Error).message 
-      });
+      logger.error('Failed to load dynamic config', { error: (error as Error).message });
     }
   }
 
-  /**
-   * Sets up Discord event listeners.
-   * Handles initialization on 'ready', message processing, and interaction routing.
-   */
   private setupEventHandlers(): void {
     this.client.once(Events.ClientReady, async (readyClient) => {
       logger.info(`✅ Bot authenticated as ${readyClient.user.tag}`);
-      try {
-        await this.registerCommands();
-        await this.logServerInfo();
-        logger.info('✨ Initialization complete. Bot is ready.');
-      } catch (error) {
-        logger.error('Post-login initialization failed', { error: (error as Error).message });
-      }
+      await this.registerCommands();
+      await this.logServerInfo();
+
+      this.client.user?.setActivity('TikTok Live', { type: ActivityType.Watching });
     });
 
     this.client.on(Events.MessageCreate, async (message) => {
       if (message.author.id === this.client.user?.id) return;
-      
       try {
         await this.forwarderService.processMessage(message);
       } catch (error) {
@@ -152,11 +133,11 @@ class Application {
         if (interaction.isChatInputCommand()) {
           await this.handleSlashCommand(interaction);
         } else if (interaction.isButton()) {
-          await this.adminController.handleButton(interaction);
+          await this.menuController.handleButton(interaction);
         } else if (interaction.isModalSubmit()) {
-          await this.adminController.handleModal(interaction);
+          await this.menuController.handleModal(interaction);
         } else if (interaction.isStringSelectMenu()) {
-          await this.adminController.handleSelectMenu(interaction);
+          await this.menuController.handleSelectMenu(interaction);
         }
       } catch (error) {
         await handleInteractionError(interaction, error as Error);
@@ -164,90 +145,95 @@ class Application {
     });
   }
 
-  /**
-   * Routes slash commands to their respective handlers based on command name.
-   * * @param interaction - The interaction object received from Discord.
-   */
   private async handleSlashCommand(interaction: any) {
+    // Only block commands if it's NOT the 'reforgot' command
+    if (interaction.commandName !== 'reforgot' && interaction.guildId !== this.config.discord.coreServerId) {
+        await interaction.reply({ content: '⛔ Commands are only available in the Core Server.', ephemeral: true });
+        return;
+    }
+
     switch (interaction.commandName) {
       case 'mapping': await handleMappingCommand(interaction, this.permissionService); break;
       case 'menu': await handleMenuCommand(interaction, this.permissionService); break;
       case 'admin': await handleAdminCommand(interaction, this.permissionService); break;
+      case 'tiktok': await handleTikTokCommand(interaction); break;
+      case 'start': await handleStartCommand(interaction); break;
+      case 'reforgot': await handleReforgotCommand(interaction, this.permissionService, this.forwarderService); break;
     }
   }
 
-  /**
-   * Registers slash commands with the Discord API.
-   * * Updates global commands and clears guild-specific commands in the core server
-   * to prevent duplication.
-   */
   private async registerCommands(): Promise<void> {
     try {
       const rest = new REST({ version: '10' }).setToken(this.config.discord.token);
-      const commandsBody = commandList.map((cmd) => cmd.toJSON());
 
-      logger.info('Updating global slash commands...', { count: commandsBody.length });
-      await rest.put(Routes.applicationCommands(this.config.discord.clientId), { body: commandsBody });
-      
+      const commandsBody = [
+          ...commandList.map((cmd) => cmd.toJSON()),
+          startCommand.toJSON(),
+          mappingCommand.toJSON(),
+          tiktokCommand.toJSON(),
+          reforgotCommand.toJSON()
+      ];
+
+      const uniqueCommands = Array.from(new Map(commandsBody.map(cmd => [cmd.name, cmd])).values());
+
+      logger.info('Updating global slash commands...', { count: uniqueCommands.length });
+
+      // Register ALL commands globally to ensure /reforgot works everywhere
+      await rest.put(Routes.applicationCommands(this.config.discord.clientId), { body: uniqueCommands });
+
+      // Also register to Core Server for immediate update (Discord global commands take time)
       if (this.config.discord.coreServerId) {
-        await rest.put(Routes.applicationGuildCommands(this.config.discord.clientId, this.config.discord.coreServerId), { body: [] });
+        await rest.put(Routes.applicationGuildCommands(this.config.discord.clientId, this.config.discord.coreServerId), { body: uniqueCommands });
       }
     } catch (error) {
       logger.error('Slash command registration failed', { error: (error as Error).message });
     }
   }
 
-  /**
-   * Logs details about the guilds the bot is currently joined to.
-   * Used for monitoring server access and verifying the core server connection.
-   */
   private async logServerInfo(): Promise<void> {
     try {
       const guilds = await this.client.guilds.fetch();
+      const config = configManager.get();
+
       logger.info(`Guild Access: Active in ${guilds.size} servers`);
+
       for (const [id, guild] of guilds) {
-        const fullGuild = await guild.fetch();
-        logger.info(`- ${fullGuild.name} (${fullGuild.id}) | Core: ${id === this.config.discord.coreServerId}`);
+        const isCore = id === config.discord.coreServerId;
+        logger.info(`- ${guild.name} (${id}) | Core: ${isCore}`);
       }
     } catch (error) {
-      logger.warn('Failed to fetch detailed server information', { error: (error as Error).message });
+      logger.warn('Could not fetch guild list');
     }
   }
 
-  /**
-   * Gracefully shuts down the application.
-   * Closes database connections and destroys the Discord client instance.
-   * * @param exitCode - The exit code to use for the process (default: 0).
-   */
   async shutdown(exitCode = 0): Promise<void> {
     if (this.isShuttingDown) return;
     this.isShuttingDown = true;
-    
-    logger.info('Initiating graceful shutdown...', { exitCode });
+
+    logger.info('Initiating graceful shutdown...');
+
     try {
-      await database.disconnect();
       this.client.destroy();
-      logger.info('Graceful shutdown completed successfully.');
+      await database.disconnect();
+      logger.info('Shutdown complete.');
       process.exit(exitCode);
     } catch (error) {
-      logger.error('Error during shutdown procedure', { error: (error as Error).message });
+      console.error('Error during shutdown:', error);
       process.exit(1);
     }
   }
 }
 
-// Instantiate and start
 const app = new Application();
 
-// Global uncaught error handling
 process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled Promise Rejection', { 
-    reason: reason instanceof Error ? reason.message : String(reason) 
+  logger.error('Unhandled Promise Rejection', {
+    reason: reason instanceof Error ? reason.message : String(reason)
   });
 });
 
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception', { error: error.message });
+  logger.error('Uncaught Exception', { error: error.message, stack: error.stack });
   app.shutdown(1);
 });
 

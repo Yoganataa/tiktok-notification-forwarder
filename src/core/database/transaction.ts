@@ -3,7 +3,7 @@ import { PoolClient } from 'pg';
 import { Database as SQLiteDB } from 'better-sqlite3';
 import { database } from './connection';
 import { DatabaseError } from '../errors/database.error';
-import { logger } from '../../utils/logger';
+import { logger } from '../../shared/utils/logger';
 
 // Define a union type for our possible clients
 type IDatabaseClient = PoolClient | SQLiteDB;
