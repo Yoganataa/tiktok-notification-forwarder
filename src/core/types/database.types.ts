@@ -9,6 +9,7 @@ export interface UserMapping {
   id: number;
   username: string;
   channel_id: string;
+  role_id?: string | null;
   created_at: Date;
   updated_at: Date;
 }

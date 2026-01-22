@@ -2,7 +2,7 @@
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import DatabaseConstructor, { Database as SQLiteDB } from 'better-sqlite3';
 import { DatabaseError } from '../errors/database.error';
-import { logger } from '../../utils/logger';
+import { logger } from '../../shared/utils/logger';
 import { DatabaseDriver } from '../config/config';
 
 /**
