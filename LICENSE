@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 yoganataa
+Copyright (c) 2026 yoganataa
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,28 +20,38 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
----
+--------------------------------------------------------------------------------
 
-### Third-Party Licenses
+## Third-Party Credits & Licenses
 
-This project includes code or utilizes libraries from the following repositories:
+This project incorporates code and logic from several open-source projects. We gratefully acknowledge the following authors:
 
-1. **tiktok-downloader**
-   - Source: https://github.com/Vette1123/tiktok-downloader
-   - License: MIT
+### 1. tiktok-downloader
+- **Author**: [Vette1123](https://github.com/Vette1123)
+- **Repository**: [tiktok-downloader](https://github.com/Vette1123/tiktok-downloader)
+- **Integration**: Core download logic adapted in `src/features/downloader/engines/vette-lib/`.
+- **License**: MIT
 
-2. **btch-downloader**
-   - Source: https://github.com/hostinger-bot/btch-downloader
-   - License: MIT
+### 2. tiktok-api-dl
+- **Author**: [TobyG74](https://github.com/TobyG74)
+- **Repository**: [tiktok-api-dl](https://github.com/TobyG74/tiktok-api-dl)
+- **Integration**: Utilized in `src/features/downloader/engines/toby-lib/`.
+- **License**: ISC
 
-3. **youtube-dl-exec**
-   - Source: https://github.com/microlinkhq/youtube-dl-exec
-   - License: MIT
+### 3. tiktok-dl
+- **Author**: [hansputera](https://github.com/hansputera)
+- **Repository**: [tiktok-dl](https://github.com/hansputera/tiktok-dl)
+- **Integration**: Utilized in `src/features/downloader/engines/hans-lib/`.
+- **License**: MIT
 
-4. **tiktok-api-dl**
-   - Source: https://github.com/TobyG74/tiktok-api-dl
-   - License: ISC
+### 4. btch-downloader
+- **Author**: [BochilTeam](https://github.com/BochilTeam) / [hostinger-bot](https://github.com/hostinger-bot)
+- **Repository**: [btch-downloader](https://github.com/hostinger-bot/btch-downloader)
+- **Integration**: Used via NPM package.
+- **License**: MIT
 
-5. **tiktok-dl**
-   - Source: https://github.com/hansputera/tiktok-dl
-   - License: MIT
+### 5. youtube-dl-exec
+- **Maintainer**: [Microlink](https://github.com/microlinkhq)
+- **Repository**: [youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec)
+- **Integration**: Used for yt-dlp execution.
+- **License**: MIT
