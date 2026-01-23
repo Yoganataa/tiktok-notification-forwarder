@@ -6,6 +6,7 @@ export class CommandsRegistry {
     private commands: BaseCommand[] = [];
 
     async init() {
+        if (this.commands.length > 0) return;
         this.commands = await ModuleLoader.loadModules<BaseCommand>('features/**/*.command.ts', BaseCommand);
         logger.info(`[CommandsRegistry] Discovered ${this.commands.length} commands.`);
     }

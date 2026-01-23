@@ -10,9 +10,7 @@ import { commandRegistry } from './features/commands.registry';
 import { handleMappingCommand } from './features/mapping/mapping.command';
 import { handleMenuCommand } from './features/menu/menu.command';
 import { handleAdminCommand } from './features/admin/admin.command';
-// handleTikTokCommand is now inside TikTokCommand.execute()
 import { handleStartCommand } from './features/start/start.command';
-// handleReforgotCommand is now inside ReforgotCommand.execute()
 import { MenuController } from './features/menu/menu.controller';
 
 // Services & Repositories
@@ -27,7 +25,6 @@ import { QueueService } from './features/queue/queue.service';
 import { DownloaderService } from './features/downloader/downloader.service';
 import { MigrationService } from './core/services/migration.service';
 import { StartupService } from './core/services/startup.service';
-import { BaseCommand } from './core/contracts/module.contract';
 
 class Application {
   private client: Client;
@@ -39,8 +36,6 @@ class Application {
   private systemConfigRepo: SystemConfigRepository;
   private isShuttingDown = false;
 
-  // NOTE: In a full DI system, these would be managed by a container.
-  // We keep them here for legacy handler support during migration.
   public services: any = {};
 
   constructor() {
@@ -74,7 +69,6 @@ class Application {
       this.configManagerReload.bind(this)
     );
 
-    // Store services for legacy access if needed
     this.services = {
         permissionService: this.permissionService,
         forwarderService: this.forwarderService
@@ -91,16 +85,11 @@ class Application {
 
       // Initialize Dynamic Modules
       await commandRegistry.init();
-      // DownloaderService now lazy loads or we can init here if we change its design,
-      // but strictly speaking the service instance created in constructor has its own lifecycle.
-      // The DownloaderService refactor handles its own module loading on init or first use if we added an init method.
-      // But let's look at how we instantiated it: `new DownloaderService(...)`.
-      // We added an `init()` method to it. We should call it.
-      await (this.queueService as any)['downloader'].init(); // Access private prop or cast.
-      // Actually queueService.downloader is private.
-      // In the refactor `DownloaderService` had an `init()` added.
-      // We should probably call it on the instance we created.
-      // Let's fix this cleanly:
+
+      // Initialize Downloader Service (loads engines)
+      // Accessing the instance created in constructor via the queue service dependency graph
+      // Ideally, we should refactor Application to hold a reference to downloaderService directly.
+      // But for minimal impact fix:
       const dlService = (this.queueService as any).downloader as DownloaderService;
       if (dlService && typeof dlService.init === 'function') {
           await dlService.init();
@@ -174,14 +163,11 @@ class Application {
   }
 
   private async handleSlashCommand(interaction: ChatInputCommandInteraction) {
-    // Only block commands if it's NOT the 'reforgot' command
-    // Note: With dynamic loading, we might want to move this check into the command itself or a middleware
     if (interaction.commandName !== 'reforgot' && interaction.guildId !== this.config.discord.coreServerId) {
         await interaction.reply({ content: '⛔ Commands are only available in the Core Server.', ephemeral: true });
         return;
     }
 
-    // Try to find command in registry
     const command = commandRegistry.getCommands().find(cmd => cmd.definition.name === interaction.commandName);
 
     if (command) {
@@ -189,12 +175,10 @@ class Application {
         return;
     }
 
-    // Fallback to legacy handlers if not found in registry (e.g. if we didn't migrate everything yet)
     switch (interaction.commandName) {
       case 'mapping': await handleMappingCommand(interaction, this.permissionService); break;
       case 'menu': await handleMenuCommand(interaction, this.permissionService); break;
       case 'admin': await handleAdminCommand(interaction, this.permissionService); break;
-      // tiktok and reforgot are now dynamic, start is likely dynamic too or legacy
       case 'start': await handleStartCommand(interaction); break;
     }
   }
@@ -203,14 +187,8 @@ class Application {
     try {
       const rest = new REST({ version: '10' }).setToken(this.config.discord.token);
 
-      // Get definitions from registry
       const commandsBody = commandRegistry.getDefinitions().map(def => def.toJSON());
 
-      // Add legacy commands if they are NOT in the registry yet
-      // For this refactor, we migrated tiktok and reforgot.
-      // We must manually import the legacy commands here to restore them for registration.
-      // I must manually import the legacy commands here to restore them for registration.
-      // The legacy commands were: mapping, menu, admin, start.
       const { mappingCommand } = require('./features/mapping/mapping.command');
       const { menuCommand } = require('./features/menu/menu.command');
       const { adminCommand } = require('./features/admin/admin.command');
@@ -218,21 +196,17 @@ class Application {
 
       const legacyDefs = [mappingCommand, menuCommand, adminCommand, startCommand].map(c => c.toJSON());
 
-      // Merge: Registry (Dynamic) + Legacy
       const allCommands = [
           ...commandsBody,
           ...legacyDefs
       ];
 
-      // Deduplicate by name
       const uniqueCommands = Array.from(new Map(allCommands.map(cmd => [cmd.name, cmd])).values());
 
       logger.info('Updating global slash commands...', { count: uniqueCommands.length });
 
-      // Register ALL commands globally to ensure /reforgot works everywhere
       await rest.put(Routes.applicationCommands(this.config.discord.clientId), { body: uniqueCommands });
 
-      // Also register to Core Server for immediate update (Discord global commands take time)
       if (this.config.discord.coreServerId) {
         await rest.put(Routes.applicationGuildCommands(this.config.discord.clientId, this.config.discord.coreServerId), { body: uniqueCommands });
       }
