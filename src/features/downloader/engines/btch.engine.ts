@@ -1,9 +1,9 @@
-import { DownloadEngine, DownloadResult } from './types';
+import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/module.contract';
 import { ttdl } from 'btch-downloader';
 import { fetchBuffer } from '../../../shared/utils/network';
 import { logger } from '../../../shared/utils/logger';
 
-export class BtchEngine implements DownloadEngine {
+export default class BtchEngine extends BaseDownloadEngine {
   name = 'btch';
 
   async download(url: string): Promise<DownloadResult> {
@@ -17,10 +17,13 @@ export class BtchEngine implements DownloadEngine {
     // Handle image slides
     if (result.video && result.video.length === 0 && (result as any).images && (result as any).images.length > 0) {
        const imageUrls = (result as any).images as string[];
-       const buffer = await fetchBuffer(imageUrls[0]);
+       const buffers = await Promise.all(
+           imageUrls.map(img => fetchBuffer(img))
+       );
        return {
          type: 'image',
-         buffer,
+         buffers,
+         buffer: buffers[0],
          urls: imageUrls
        };
     }

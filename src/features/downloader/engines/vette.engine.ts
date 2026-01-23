@@ -1,9 +1,9 @@
-import { DownloadEngine, DownloadResult } from './types';
+import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/module.contract';
 import { fetchBuffer } from '../../../shared/utils/network';
 import { logger } from '../../../shared/utils/logger';
 import { Downloader } from './vette-lib/downloader';
 
-export class VetteEngine implements DownloadEngine {
+export default class VetteEngine extends BaseDownloadEngine {
   name = 'vette';
   private downloader = new Downloader();
 

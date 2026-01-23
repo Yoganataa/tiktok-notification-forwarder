@@ -1,8 +1,22 @@
-import { mappingCommand } from './mapping/mapping.command';
-import { menuCommand } from './menu/menu.command';
-import { adminCommand } from './admin/admin.command';
-import { tiktokCommand } from './tiktok/tiktok.command';
-import { startCommand } from './start/start.command';
-import { reforgotCommand } from './admin/reforgot.command';
+import { ModuleLoader } from '../core/services/module-loader.service';
+import { BaseCommand } from '../core/contracts/module.contract';
+import { logger } from '../shared/utils/logger';
 
-export const commandList = [mappingCommand, menuCommand, adminCommand, tiktokCommand, startCommand, reforgotCommand];
+export class CommandsRegistry {
+    private commands: BaseCommand[] = [];
+
+    async init() {
+        this.commands = await ModuleLoader.loadModules<BaseCommand>('src/features/**/*.command.ts', BaseCommand);
+        logger.info(`[CommandsRegistry] Discovered ${this.commands.length} commands.`);
+    }
+
+    getCommands() {
+        return this.commands;
+    }
+
+    getDefinitions() {
+        return this.commands.map(cmd => cmd.definition);
+    }
+}
+
+export const commandRegistry = new CommandsRegistry();

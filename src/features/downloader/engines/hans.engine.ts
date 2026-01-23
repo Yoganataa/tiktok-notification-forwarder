@@ -1,8 +1,8 @@
-import { DownloadEngine, DownloadResult } from './types';
+import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/module.contract';
 import { getProvider } from './hans-lib/core/src';
 import { fetchBuffer } from '../../../shared/utils/network';
 
-export class HansEngine implements DownloadEngine {
+export default class HansEngine extends BaseDownloadEngine {
   name = 'hans';
   private providerName: string = 'random';
 
@@ -41,10 +41,13 @@ export class HansEngine implements DownloadEngine {
     }
 
     if (result.slides && result.slides.length > 0) {
-        const buffer = await fetchBuffer(result.slides[0]);
+        const buffers = await Promise.all(
+            result.slides.map(img => fetchBuffer(img))
+        );
         return {
             type: 'image',
-            buffer,
+            buffers,
+            buffer: buffers[0],
             urls: result.slides
         };
     }

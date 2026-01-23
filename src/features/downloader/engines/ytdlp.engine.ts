@@ -1,9 +1,9 @@
-import { DownloadEngine, DownloadResult } from './types';
+import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/module.contract';
 import path from 'path';
 import fs from 'fs';
 import { create as createYoutubeDl } from 'youtube-dl-exec';
 
-export class YtDlpEngine implements DownloadEngine {
+export default class YtDlpEngine extends BaseDownloadEngine {
   name = 'yt-dlp';
 
   private getBinaryPath(): string {

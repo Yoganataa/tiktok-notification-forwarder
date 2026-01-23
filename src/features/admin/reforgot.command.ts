@@ -1,19 +1,51 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { BaseCommand } from '../../core/contracts/module.contract';
 import { ForwarderService } from '../forwarder/forwarder.service';
 import { PermissionService } from './permission.service';
 import { configManager } from '../../core/config/config';
 import { logger } from '../../shared/utils/logger';
+import { UserMappingRepository } from '../../core/repositories/user-mapping.repository';
+import { AccessControlRepository } from '../../core/repositories/access-control.repository';
+import { QueueRepository } from '../../core/repositories/queue.repository';
+import { SystemConfigRepository } from '../../core/repositories/system-config.repository';
+import { DownloaderService } from '../downloader/downloader.service';
+import { NotificationService } from '../notification/notification.service';
+import { QueueService } from '../queue/queue.service';
 
-export const reforgotCommand = new SlashCommandBuilder()
-  .setName('reforgot')
-  .setDescription('Reprocess unacknowledged notifications from a starting message ID')
-  .addStringOption(option =>
-      option.setName('message_id')
-        .setDescription('The Message ID to start scanning from (exclusive)')
-        .setRequired(true)
-  );
+export default class ReforgotCommand extends BaseCommand {
+    get definition() {
+        return new SlashCommandBuilder()
+            .setName('reforgot')
+            .setDescription('Reprocess unacknowledged notifications from a starting message ID')
+            .addStringOption(option =>
+                option.setName('message_id')
+                    .setDescription('The Message ID to start scanning from (exclusive)')
+                    .setRequired(true)
+            );
+    }
 
-export async function handleReforgotCommand(
+    async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+        // DI HACK: Should be injected properly
+        const userMappingRepo = new UserMappingRepository();
+        const accessControlRepo = new AccessControlRepository();
+        const systemConfigRepo = new SystemConfigRepository();
+        const queueRepo = new QueueRepository();
+        const downloaderService = new DownloaderService(systemConfigRepo);
+        // Important: Init downloader to load engines if it hasn't been already (it probably has in app start, but this is a new instance)
+        // Actually, we should probably instantiate these services ONCE in the App and pass them, but for this refactor scope we re-instantiate or need a container.
+        // For now, re-instantiating repositories is safe (stateless). Services might be heavier.
+        await downloaderService.init();
+
+        const notificationService = new NotificationService(userMappingRepo);
+        const queueService = new QueueService(queueRepo, downloaderService, notificationService, systemConfigRepo);
+        const permissionService = new PermissionService(accessControlRepo);
+        const forwarderService = new ForwarderService(notificationService, queueService, userMappingRepo);
+
+        return handleReforgotCommand(interaction, permissionService, forwarderService);
+    }
+}
+
+async function handleReforgotCommand(
   interaction: ChatInputCommandInteraction,
   permissionService: PermissionService,
   forwarderService: ForwarderService

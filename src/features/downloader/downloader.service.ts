@@ -1,29 +1,27 @@
-import { DownloadEngine, DownloadResult } from './engines/types';
-import { BtchEngine } from './engines/btch.engine';
-import { TobyEngine } from './engines/toby.engine';
-import { YtDlpEngine } from './engines/ytdlp.engine';
-import { HansEngine } from './engines/hans.engine';
-import { VetteEngine } from './engines/vette.engine';
+import { BaseDownloadEngine, DownloadResult } from '../../core/contracts/module.contract';
 import { SystemConfigRepository } from '../../core/repositories/system-config.repository';
 import { logger } from '../../shared/utils/logger';
+import { ModuleLoader } from '../../core/services/module-loader.service';
+import HansEngine from './engines/hans.engine';
+import TobyEngine from './engines/toby.engine';
 
 export class DownloaderService {
-  private engines: Map<string, DownloadEngine> = new Map();
+  private engines: Map<string, BaseDownloadEngine> = new Map();
 
-  constructor(private configRepo: SystemConfigRepository) {
-    this.registerEngine(new VetteEngine()); // Default priority?
-    this.registerEngine(new BtchEngine());
-    this.registerEngine(new TobyEngine());
-    this.registerEngine(new YtDlpEngine());
-    this.registerEngine(new HansEngine());
+  constructor(private configRepo: SystemConfigRepository) {}
+
+  async init() {
+     const engines = await ModuleLoader.loadModules<BaseDownloadEngine>('src/features/downloader/engines/**/*.engine.ts', BaseDownloadEngine);
+     engines.forEach(engine => this.registerEngine(engine));
+     logger.info(`[DownloaderService] Initialized with ${engines.length} engines.`);
   }
 
-  registerEngine(engine: DownloadEngine) {
+  registerEngine(engine: BaseDownloadEngine) {
     this.engines.set(engine.name, engine);
   }
 
   async download(url: string): Promise<DownloadResult> {
-    let engineName = await this.configRepo.get('DOWNLOAD_ENGINE') || 'vette'; // Changed default to vette
+    let engineName = await this.configRepo.get('DOWNLOAD_ENGINE') || 'vette';
     // Format: "engine:subtype" e.g. "hans:snaptik" or "tobyg74:v2"
     let subType = '';
 
@@ -37,6 +35,8 @@ export class DownloaderService {
     }
 
     // Configure sub-engine if applicable
+    // We cast to any because these specific methods aren't on BaseDownloadEngine
+    // In a cleaner design, we might have 'configure(options)' on the Base class.
     if (engine instanceof HansEngine && subType) {
         engine.setProvider(subType);
     } else if (engine instanceof TobyEngine && subType) {

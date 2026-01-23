@@ -1,8 +1,8 @@
-import { DownloadEngine, DownloadResult } from './types';
+import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/module.contract';
 import TobyLib from './toby-lib/index';
 import { fetchBuffer } from '../../../shared/utils/network';
 
-export class TobyEngine implements DownloadEngine {
+export default class TobyEngine extends BaseDownloadEngine {
   name = 'tobyg74';
   private version: 'v1' | 'v2' | 'v3' = 'v1';
 
@@ -20,10 +20,13 @@ export class TobyEngine implements DownloadEngine {
     const data = result.result as any;
 
     if (data.type === 'image' && data.images && data.images.length > 0) {
-       const buffer = await fetchBuffer(data.images[0]);
+       const buffers = await Promise.all(
+           data.images.map((img: string) => fetchBuffer(img))
+       );
        return {
          type: 'image',
-         buffer,
+         buffers,
+         buffer: buffers[0],
          urls: data.images
        };
     }
