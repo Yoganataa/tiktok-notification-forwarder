@@ -207,8 +207,10 @@ class Application {
 
       await rest.put(Routes.applicationCommands(this.config.discord.clientId), { body: uniqueCommands });
 
+      // We clear the guild-specific commands for the core server because we're using global commands.
+      // This prevents command duplication in the Discord UI.
       if (this.config.discord.coreServerId) {
-        await rest.put(Routes.applicationGuildCommands(this.config.discord.clientId, this.config.discord.coreServerId), { body: uniqueCommands });
+        await rest.put(Routes.applicationGuildCommands(this.config.discord.clientId, this.config.discord.coreServerId), { body: [] });
       }
     } catch (error) {
       logger.error('Slash command registration failed', { error: (error as Error).message });
