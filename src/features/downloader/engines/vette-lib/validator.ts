@@ -22,8 +22,8 @@ export function validateUrl(url: string): boolean {
 export function parseVideoId(url: string): string | null {
   const patterns = [
     /\/video\/(\d+)/,
-    /\/photo\/(\d+)/,
     /\/v\/(\d+)/,
+    /\/photo\/(\d+)/,
     /vm\.tiktok\.com\/([\w\d]+)/,
     /vt\.tiktok\.com\/([\w\d]+)/,
     /\/t\/([\w\d]+)/,

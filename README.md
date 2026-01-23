@@ -105,12 +105,12 @@ src/
 
 | Command | Description | Permission |
 | :--- | :--- | :--- |
-| `/menu` | Open the main Admin Dashboard (Manage Mappings, Config, Roles). | Admin/Sudo |
-| `/mapping add <user> <channel>` | Quickly map a TikTok username to a Discord channel. | Admin/Sudo |
-| `/tiktok dl <url>` | Manually download a TikTok video/slide. | Global |
-| `/tiktok stalk <user>` | View TikTok profile stats. | Global |
-| `/reforgot <msg_id>` | Reprocess missed notifications starting from a Message ID. | Sudo |
-| `/start` | Display bot status and info. | Global |
+| `/menu` | Open the main Admin Dashboard (Manage Mappings, Config, Roles). | Admin/Sudo (Core Guild) |
+| `/mapping add <user> <channel>` | Quickly map a TikTok username to a Discord channel. | Admin/Sudo (Core Guild) |
+| `/tiktok dl <url>` | Manually download a TikTok video/slide. | Core Guild |
+| `/tiktok stalk <user>` | View TikTok profile stats. | Core Guild |
+| `/reforgot <msg_id>` | Reprocess missed notifications starting from a Message ID. | Sudo (Global) |
+| `/start` | Display bot status and info. | Core Guild |
 
 ---
 

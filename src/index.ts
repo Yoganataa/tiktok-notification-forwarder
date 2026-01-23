@@ -87,9 +87,6 @@ class Application {
       await commandRegistry.init();
 
       // Initialize Downloader Service (loads engines)
-      // Accessing the instance created in constructor via the queue service dependency graph
-      // Ideally, we should refactor Application to hold a reference to downloaderService directly.
-      // But for minimal impact fix:
       const dlService = (this.queueService as any).downloader as DownloaderService;
       if (dlService && typeof dlService.init === 'function') {
           await dlService.init();
@@ -163,6 +160,15 @@ class Application {
   }
 
   private async handleSlashCommand(interaction: ChatInputCommandInteraction) {
+    // Basic Guild Guard
+    if (!interaction.guildId) {
+        await interaction.reply({ content: '⛔ Commands are not available in DMs.', ephemeral: true });
+        return;
+    }
+
+    // Command Scoping Guard:
+    // - reforgot: Allowed in ANY guild (Global)
+    // - others: Allowed ONLY in Core Server
     if (interaction.commandName !== 'reforgot' && interaction.guildId !== this.config.discord.coreServerId) {
         await interaction.reply({ content: '⛔ Commands are only available in the Core Server.', ephemeral: true });
         return;
@@ -187,8 +193,10 @@ class Application {
     try {
       const rest = new REST({ version: '10' }).setToken(this.config.discord.token);
 
-      const commandsBody = commandRegistry.getDefinitions().map(def => def.toJSON());
+      // 1. Get Dynamic Commands (Reforgot, TikTok, etc.)
+      const dynamicDefs = commandRegistry.getDefinitions().map(def => def.toJSON());
 
+      // 2. Get Legacy Commands
       const { mappingCommand } = require('./features/mapping/mapping.command');
       const { menuCommand } = require('./features/menu/menu.command');
       const { adminCommand } = require('./features/admin/admin.command');
@@ -196,21 +204,34 @@ class Application {
 
       const legacyDefs = [mappingCommand, menuCommand, adminCommand, startCommand].map(c => c.toJSON());
 
-      const allCommands = [
-          ...commandsBody,
-          ...legacyDefs
-      ];
-
+      // 3. Merge and Unique
+      const allCommands = [...dynamicDefs, ...legacyDefs];
       const uniqueCommands = Array.from(new Map(allCommands.map(cmd => [cmd.name, cmd])).values());
 
-      logger.info('Updating global slash commands...', { count: uniqueCommands.length });
+      // 4. Apply DM Permission = False to ALL commands
+      uniqueCommands.forEach(cmd => {
+          cmd.dm_permission = false; // Disable DMs
 
-      await rest.put(Routes.applicationCommands(this.config.discord.clientId), { body: uniqueCommands });
+          // Force Guild Only context (Contexts: 0=Guild, 1=BotDM, 2=GDM)
+          // @ts-ignore - DiscordJS types might lag behind raw API payload
+          cmd.contexts = [0];
+          // Force Guild Install Only (IntegrationTypes: 0=Guild, 1=User)
+          // @ts-ignore
+          cmd.integration_types = [0];
+      });
 
-      // We clear the guild-specific commands for the core server because we're using global commands.
-      // This prevents command duplication in the Discord UI.
+      // 5. Separate Scopes
+      const globalCommands = uniqueCommands.filter(cmd => cmd.name === 'reforgot');
+      const guildCommands = uniqueCommands.filter(cmd => cmd.name !== 'reforgot');
+
+      logger.info(`Registering Global Commands: ${globalCommands.map(c => c.name).join(', ')}`);
+      await rest.put(Routes.applicationCommands(this.config.discord.clientId), { body: globalCommands });
+
       if (this.config.discord.coreServerId) {
-        await rest.put(Routes.applicationGuildCommands(this.config.discord.clientId, this.config.discord.coreServerId), { body: [] });
+        logger.info(`Registering Core Guild Commands: ${guildCommands.map(c => c.name).join(', ')}`);
+        await rest.put(Routes.applicationGuildCommands(this.config.discord.clientId, this.config.discord.coreServerId), { body: guildCommands });
+      } else {
+          logger.warn('No CORE_SERVER_ID defined. Guild commands skipped.');
       }
     } catch (error) {
       logger.error('Slash command registration failed', { error: (error as Error).message });

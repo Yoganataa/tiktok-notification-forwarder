@@ -19,6 +19,7 @@ export default class VetteEngine extends BaseDownloadEngine {
 
         // Check for photo carousel first
         if (result.isPhotoCarousel && result.images && result.images.length > 0) {
+             logger.info(`[VetteEngine] Processing ${result.images.length} images`);
              const buffers = await Promise.all(
                  result.images.map(img => fetchBuffer(img.url))
              );
@@ -29,7 +30,7 @@ export default class VetteEngine extends BaseDownloadEngine {
                  // Keep the first buffer for backward compatibility or singular usage if needed,
                  // though 'buffers' should be preferred for 'image' type now.
                  buffer: buffers[0],
-                 urls: result.images.map(img => img.url)
+                 urls: result.images.map(img => img.url).filter((u): u is string => !!u)
              };
         }
 

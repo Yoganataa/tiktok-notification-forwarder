@@ -55,3 +55,39 @@ This project incorporates code and logic from several open-source projects. We g
 - **Repository**: [youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec)
 - **Integration**: Used for yt-dlp execution.
 - **License**: MIT
+
+--------------------------------------------------------------------------------
+
+## Third-Party Credits & Licenses
+
+This project incorporates code and logic from several open-source projects. We gratefully acknowledge the following authors:
+
+### 1. tiktok-downloader
+- **Author**: [Vette1123](https://github.com/Vette1123)
+- **Repository**: [tiktok-downloader](https://github.com/Vette1123/tiktok-downloader)
+- **Integration**: Core download logic adapted in `src/features/downloader/engines/vette-lib/`.
+- **License**: MIT
+
+### 2. tiktok-api-dl
+- **Author**: [TobyG74](https://github.com/TobyG74)
+- **Repository**: [tiktok-api-dl](https://github.com/TobyG74/tiktok-api-dl)
+- **Integration**: Utilized in `src/features/downloader/engines/toby-lib/`.
+- **License**: ISC
+
+### 3. tiktok-dl
+- **Author**: [hansputera](https://github.com/hansputera)
+- **Repository**: [tiktok-dl](https://github.com/hansputera/tiktok-dl)
+- **Integration**: Utilized in `src/features/downloader/engines/hans-lib/`.
+- **License**: MIT
+
+### 4. btch-downloader
+- **Author**: [BochilTeam](https://github.com/BochilTeam) / [hostinger-bot](https://github.com/hostinger-bot)
+- **Repository**: [btch-downloader](https://github.com/hostinger-bot/btch-downloader)
+- **Integration**: Used via NPM package.
+- **License**: MIT
+
+### 5. youtube-dl-exec
+- **Maintainer**: [Microlink](https://github.com/microlinkhq)
+- **Repository**: [youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec)
+- **Integration**: Used for yt-dlp execution.
+- **License**: MIT

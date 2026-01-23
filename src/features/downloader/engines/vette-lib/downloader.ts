@@ -164,6 +164,7 @@ export class Downloader {
         if (isPhotoCarousel) {
           images = data.images.map((img: string, index: number) => ({
             id: `${videoId}_img_${index}`,
+            // Ensure URL is absolute/valid
             url: img,
             thumbnail: img,
           }))
