@@ -16,7 +16,7 @@ export class ModuleLoader {
         const finalPattern = isProduction ? pattern.replace('.ts', '.js') : pattern;
         const searchPath = path.join(rootDir, finalPattern).replace(/\\/g, '/'); // normalize for glob
 
-        logger.info(`[ModuleLoader] Scanning: ${searchPath}`);
+        logger.debug(`[ModuleLoader] Scanning: ${searchPath}`);
 
         const files = await glob(searchPath);
         const modules: T[] = [];
@@ -41,7 +41,13 @@ export class ModuleLoader {
                     continue;
                 }
 
-                const instance = new ModuleClass();
+                let instance: any;
+                try {
+                    instance = new ModuleClass();
+                } catch {
+                    // Not constructable (e.g. arrow function or object)
+                    continue;
+                }
 
                 // Validate against contract
                 if (instance instanceof baseClass) {

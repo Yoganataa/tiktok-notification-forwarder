@@ -208,27 +208,7 @@ class Application {
 
       // Add legacy commands if they are NOT in the registry yet
       // For this refactor, we migrated tiktok and reforgot.
-      // We should check duplicates.
-      const legacyCommands = [
-          // startCommand.toJSON(),
-          // mappingCommand.toJSON(),
-          // ...
-      ];
-      // Actually, since we didn't migrate ALL commands in the plan (only examples),
-      // we need to merge them.
-      // But wait, the plan said "Refactor Command Registration... Into an automatic registry".
-      // We implemented the registry. Modules that are NOT .command.ts files won't be loaded.
-      // mapping, menu, admin, start are NOT migrated to class-based .command.ts yet in this turn.
-      // So we must manually include them from the old list, filtering out what we replaced.
-
-      const { commandList: legacyList } = require('./features/commands.registry'); // We overwrote this file?
-      // Wait, we overwrote src/features/commands.registry.ts with the new Class registry!
-      // This means we LOST the legacy exports if we didn't migrate them.
-      // CRITICAL: The plan was "Refactor Command Registration".
-      // If we didn't migrate Mapping/Menu/Admin/Start to classes, they are lost from the registry.
-      // I need to ensure `handleSlashCommand` fallback works, but `registerCommands` needs the JSON.
-
-      // Since I overwrote the registry file, I can't import the old list.
+      // We must manually import the legacy commands here to restore them for registration.
       // I must manually import the legacy commands here to restore them for registration.
       // The legacy commands were: mapping, menu, admin, start.
       const { mappingCommand } = require('./features/mapping/mapping.command');

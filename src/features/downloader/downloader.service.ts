@@ -11,7 +11,7 @@ export class DownloaderService {
   constructor(private configRepo: SystemConfigRepository) {}
 
   async init() {
-     const engines = await ModuleLoader.loadModules<BaseDownloadEngine>('src/features/downloader/engines/**/*.engine.ts', BaseDownloadEngine);
+     const engines = await ModuleLoader.loadModules<BaseDownloadEngine>('features/downloader/engines/**/*.engine.ts', BaseDownloadEngine);
      engines.forEach(engine => this.registerEngine(engine));
      logger.info(`[DownloaderService] Initialized with ${engines.length} engines.`);
   }

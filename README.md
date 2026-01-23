@@ -135,3 +135,8 @@ This bot is for educational and personal use. It is not affiliated with, endorse
 ---
 
 **License**: MIT
+
+## 👩‍💻 Development
+
+Want to add a new command or downloader engine?
+Check out the **[Developer Guide](docs/DEVELOPMENT.md)** for instructions on using the Dynamic Module Loader system.
