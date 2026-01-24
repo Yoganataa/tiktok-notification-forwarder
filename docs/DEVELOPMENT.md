@@ -1,102 +1,51 @@
 # Developer Guide
 
-This project utilizes a **Dynamic Module Loader** architecture to ensure scalability and ease of extension. Commands and Download Engines are automatically discovered and registered at runtime, eliminating the need for manual registry updates.
+## Architecture
 
-## 🏗 Architecture Overview
+This project uses the **Sapphire Framework** for Discord bot functionality, integrated with a custom feature-based architecture.
 
-*   **Module Loader**: A core service (`src/core/services/module-loader.service.ts`) scans the filesystem for files matching specific patterns (`*.command.ts`, `*.engine.ts`).
-*   **Contracts**: Base classes (`BaseCommand`, `BaseDownloadEngine`) defined in `src/core/contracts/module.contract.ts` ensure type safety and consistent behavior.
-*   **Auto-Discovery**:
-    *   Commands are scanned from `src/features/**/*.command.ts`.
-    *   Engines are scanned from `src/features/downloader/engines/**/*.engine.ts`.
+### Key Components
 
----
+1.  **Commands**: Located in `src/commands/`. All commands must extend Sapphire's `Command` or `Subcommand` class.
+    *   **Registration**: Commands are registered to the `CORE_SERVER_ID` by default using `{ guildIds: [...] }` in `registerApplicationCommands`.
+    *   **Preconditions**: Use decorators like `@ApplyOptions` with `preconditions: ['AdminOnly']` to enforce permissions.
 
-## ➕ Adding a New Command
+2.  **Services**: Located in `src/features/`. These contain the business logic.
+    *   `DownloaderService`: Handles media downloading using various engines (Vette, Hans, YtDlp).
+    *   `ForwarderService`: Analyzes messages and forwards content.
+    *   `QueueService`: Manages reliable delivery via database queue.
 
-To add a new Slash Command, you simply need to create a new file. No other file modifications are required.
+3.  **Repositories**: Located in `src/core/repositories/`. Handle all database interactions (PostgreSQL/SQLite).
 
-### Steps
+4.  **Dependency Injection**: Managed via Sapphire's `container`.
+    *   Access services via `container.services.serviceName`.
+    *   Access repositories via `container.repos.repoName`.
 
-1.  Create a new file in `src/features/<feature-name>/<command-name>.command.ts`.
-2.  Extend the `BaseCommand` abstract class.
-3.  Implement the required methods (`definition`, `execute`).
-4.  **Export the class as default**.
+### Adding a New Command
 
-### Template
+1.  Create a file in `src/commands/<category>/<command>.ts`.
+2.  Extend `Command` or `Subcommand`.
+3.  Implement `registerApplicationCommands` and `chatInputRun`.
+4.  Ensure `guildIds` is set if it's a core-only command.
 
 ```typescript
-import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
-import { BaseCommand } from '../../core/contracts/module.contract';
+import { Command } from '@sapphire/framework';
 
-export default class PingCommand extends BaseCommand {
-    // 1. Define the Slash Command structure
-    get definition() {
-        return new SlashCommandBuilder()
-            .setName('ping')
-            .setDescription('Replies with Pong!');
+export class MyCommand extends Command {
+    public override registerApplicationCommands(registry: Command.Registry) {
+        registry.registerChatInputCommand((builder) =>
+            builder.setName('mycommand').setDescription('My awesome command')
+        );
     }
 
-    // 2. Implement the execution logic
-    async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-        await interaction.reply({ content: 'Pong! 🏓', ephemeral: true });
+    public override async chatInputRun(interaction: Command.ChatInputCommandInteraction) {
+        return interaction.reply('Hello!');
     }
 }
 ```
 
-Once saved (and built), the bot will automatically register `/ping` on the next restart.
+### Adding a New Download Engine
 
----
-
-## ⬇️ Adding a New Download Engine
-
-To add support for a new downloader (or a different strategy), create a new engine module.
-
-### Steps
-
-1.  Create a new file in `src/features/downloader/engines/<engine-name>.engine.ts`.
-2.  Extend the `BaseDownloadEngine` abstract class.
-3.  Implement the `name` property and `download` method.
-4.  **Export the class as default**.
-
-### Template
-
-```typescript
-import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/module.contract';
-import { fetchBuffer } from '../../../shared/utils/network';
-
-export default class MyNewEngine extends BaseDownloadEngine {
-    // Unique name to reference in .env (DOWNLOAD_ENGINE=mynewengine)
-    name = 'mynewengine';
-
-    async download(url: string): Promise<DownloadResult> {
-        // Implement your logic here (e.g., call an API, scrape a page)
-        const videoUrl = await someExternalApi(url);
-        const buffer = await fetchBuffer(videoUrl);
-
-        return {
-            type: 'video',
-            buffer: buffer,
-            urls: [videoUrl]
-        };
-    }
-}
-```
-
-### Activation
-
-To use your new engine, update your `.env` file:
-
-```env
-DOWNLOAD_ENGINE=mynewengine
-```
-
----
-
-## ⚠️ Important Notes
-
-1.  **Default Export**: The loader specifically looks for a `default` export that is a class. Named exports will be ignored.
-2.  **Inheritance**: Your class **must** extend `BaseCommand` or `BaseDownloadEngine`. The loader performs an `instanceof` check to validate the module.
-3.  **File Naming**:
-    *   Commands must end in `.command.ts`.
-    *   Engines must end in `.engine.ts`.
+1.  Create the engine in `src/features/downloader/engines/`.
+2.  Implement the `DownloadEngine` interface.
+3.  Register it in `DownloaderService.init()` using `this.registerEngine()`.
