@@ -48,11 +48,6 @@ export class ConfigController {
             { label: 'Btch Downloader', value: 'btch', description: 'Alternative', default: engineConfig === 'btch' },
             { label: 'YT-DLP', value: 'yt-dlp', description: 'Reliable binary', default: engineConfig === 'yt-dlp' },
 
-            // TobyG74 Sub-engines
-            { label: 'TobyG74 (TiktokAPI/v1)', value: 'tobyg74:v1', description: 'TikW / Liber', default: engineConfig === 'tobyg74:v1' },
-            { label: 'TobyG74 (SSSTik/v2)', value: 'tobyg74:v2', description: 'SSSTik', default: engineConfig === 'tobyg74:v2' },
-            { label: 'TobyG74 (MusicalDown/v3)', value: 'tobyg74:v3', description: 'MusicalDown', default: engineConfig === 'tobyg74:v3' },
-
             // Hans Sub-engines (Popular ones)
             { label: 'Hans (Native)', value: 'hans:native', description: 'Direct Scraping', default: engineConfig === 'hans:native' },
             { label: 'Hans (Snaptik)', value: 'hans:snaptik', description: 'Snaptik Provider', default: engineConfig === 'hans:snaptik' },

@@ -32,13 +32,7 @@ This project incorporates code and logic from several open-source projects. We g
 - **Integration**: Core download logic adapted in `src/features/downloader/engines/vette-lib/`.
 - **License**: MIT
 
-### 2. tiktok-api-dl
-- **Author**: [TobyG74](https://github.com/TobyG74)
-- **Repository**: [tiktok-api-dl](https://github.com/TobyG74/tiktok-api-dl)
-- **Integration**: Utilized in `src/features/downloader/engines/toby-lib/`.
-- **License**: ISC
-
-### 3. tiktok-dl
+### 2. tiktok-dl
 - **Author**: [hansputera](https://github.com/hansputera)
 - **Repository**: [tiktok-dl](https://github.com/hansputera/tiktok-dl)
 - **Integration**: Utilized in `src/features/downloader/engines/hans-lib/`.

@@ -3,7 +3,6 @@ import { SystemConfigRepository } from '../../core/repositories/system-config.re
 import { logger } from '../../shared/utils/logger';
 import { ModuleLoader } from '../../core/services/module-loader.service';
 import HansEngine from './engines/hans.engine';
-import TobyEngine from './engines/toby.engine';
 
 export class DownloaderService {
   private engines: Map<string, BaseDownloadEngine> = new Map();
@@ -40,8 +39,6 @@ export class DownloaderService {
     // In a cleaner design, we might have 'configure(options)' on the Base class.
     if (engine instanceof HansEngine && subType) {
         engine.setProvider(subType);
-    } else if (engine instanceof TobyEngine && subType) {
-        engine.setVersion(subType as 'v1' | 'v2' | 'v3');
     }
 
     logger.info(`Downloading using engine: ${engineName} (${subType || 'default'})`);

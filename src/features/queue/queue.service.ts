@@ -101,24 +101,16 @@ export class QueueService {
 
           if (files.length > 0) {
               const MAX_SIZE = 24 * 1024 * 1024; // 24MB margin
-              // Check total size is complex with chunking. We should check if ANY file is > 25MB individually,
-              // or rely on chunking to handle quantity.
-              // However, Discord 25MB limit is PER MESSAGE.
-              // So simplistic total check might block valid chunkable content.
-              // Let's check individual file sizes.
-
-              const anyFileTooLarge = files.some(f => f.attachment.length > MAX_SIZE);
-
-              if (anyFileTooLarge) {
-                 logger.warn(`One or more files too large (>24MB), falling back to link.`);
-                 await (channel as any).send({ content: content + url, embeds: [embed] });
-              } else {
-                 try {
-                     await sendChunkedMessage(channel as any, content || undefined, [embed], files);
-                 } catch (sendError) {
+              try {
+                  // sendChunkedMessage handles splitting array of files into batches of 10
+                  await sendChunkedMessage(channel as any, content || undefined, [embed], files);
+              } catch (sendError) {
+                  if ((sendError as Error).message.includes('too large') || (sendError as Error).message.includes('413')) {
                      logger.warn('Failed to send file(s), falling back to link', { error: (sendError as Error).message });
                      await (channel as any).send({ content: content + url, embeds: [embed] });
-                 }
+                  } else {
+                      throw sendError;
+                  }
               }
           } else {
               // No files found (media object existed but no buffer?), fallback

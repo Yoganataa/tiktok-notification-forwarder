@@ -7,10 +7,6 @@ import { handleInteractionError } from './shared/utils/error-handler';
 import { commandRegistry } from './features/commands.registry';
 
 // Controllers & Handlers (Refactored commands will be loaded automatically)
-import { handleMappingCommand } from './features/mapping/mapping.command';
-import { handleMenuCommand } from './features/menu/menu.command';
-import { handleAdminCommand } from './features/admin/admin.command';
-import { handleStartCommand } from './features/start/start.command';
 import { MenuController } from './features/menu/menu.controller';
 
 // Services & Repositories
@@ -25,6 +21,12 @@ import { QueueService } from './features/queue/queue.service';
 import { DownloaderService } from './features/downloader/downloader.service';
 import { MigrationService } from './core/services/migration.service';
 import { StartupService } from './core/services/startup.service';
+
+export interface AppContext {
+    permissionService?: PermissionService;
+    menuController?: MenuController;
+    forwarderService?: ForwarderService;
+}
 
 class Application {
   private client: Client;
@@ -177,15 +179,12 @@ class Application {
     const command = commandRegistry.getCommands().find(cmd => cmd.definition.name === interaction.commandName);
 
     if (command) {
-        await command.execute(interaction);
-        return;
-    }
-
-    switch (interaction.commandName) {
-      case 'mapping': await handleMappingCommand(interaction, this.permissionService); break;
-      case 'menu': await handleMenuCommand(interaction, this.permissionService); break;
-      case 'admin': await handleAdminCommand(interaction, this.permissionService); break;
-      case 'start': await handleStartCommand(interaction); break;
+        // Inject dependencies (Context) into the command execution
+        await command.execute(interaction, {
+            permissionService: this.permissionService,
+            menuController: this.menuController,
+            forwarderService: this.forwarderService
+        });
     }
   }
 
@@ -193,20 +192,11 @@ class Application {
     try {
       const rest = new REST({ version: '10' }).setToken(this.config.discord.token);
 
-      // 1. Get Dynamic Commands (Reforgot, TikTok, etc.)
-      const dynamicDefs = commandRegistry.getDefinitions().map(def => def.toJSON());
+      // 1. Get All Dynamic Commands (Reforgot, TikTok, Admin, Menu, Mapping, Start)
+      const allDefs = commandRegistry.getDefinitions().map(def => def.toJSON());
 
-      // 2. Get Legacy Commands
-      const { mappingCommand } = require('./features/mapping/mapping.command');
-      const { menuCommand } = require('./features/menu/menu.command');
-      const { adminCommand } = require('./features/admin/admin.command');
-      const { startCommand } = require('./features/start/start.command');
-
-      const legacyDefs = [mappingCommand, menuCommand, adminCommand, startCommand].map(c => c.toJSON());
-
-      // 3. Merge and Unique
-      const allCommands = [...dynamicDefs, ...legacyDefs];
-      const uniqueCommands = Array.from(new Map(allCommands.map(cmd => [cmd.name, cmd])).values());
+      // 2. De-duplicate (just in case, though the registry should be clean)
+      const uniqueCommands = Array.from(new Map(allDefs.map(cmd => [cmd.name, cmd])).values());
 
       // 4. Apply DM Permission = False to ALL commands
       uniqueCommands.forEach(cmd => {
