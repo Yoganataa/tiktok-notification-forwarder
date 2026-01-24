@@ -1,1 +1,1 @@
-export * from '../../../core/contracts/module.contract';
+export * from '../../../core/contracts/download.contract';

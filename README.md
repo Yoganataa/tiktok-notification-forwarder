@@ -30,21 +30,20 @@ A robust, enterprise-grade Discord bot designed to forward TikTok notifications 
 
 ## 🏗 Architecture
 
-The project follows a **Modular Feature-based Architecture**, prioritizing separation of concerns and scalability:
+The project follows a **Sapphire Framework** architecture:
 
 ```
 src/
-├── core/           # Core infrastructure (DB, Config, Migrations)
-├── features/       # Feature modules (Admin, Downloader, Forwarder, Queue, etc.)
-│   ├── admin/      # Admin commands & logic
-│   ├── downloader/ # Media downloading engines (Vette, Toby, etc.)
-│   ├── forwarder/  # Message processing logic
-│   ├── mapping/    # User-to-Channel mapping
-│   ├── menu/       # Interactive UI controllers
-│   ├── notification/# Notification parsing & formatting
-│   └── queue/      # Job queue implementation
-├── shared/         # Shared utilities (Logger, Network, Discord Chunker)
-└── index.ts        # Application entry point
+├── commands/           # Sapphire Commands
+├── listeners/          # Event Listeners
+├── preconditions/      # Permission Guards
+├── core/               # Infrastructure (DB, Config)
+├── features/           # Business Logic Services
+│   ├── downloader/     # Download Engines
+│   ├── forwarder/      # Processing Logic
+│   └── ...
+├── lib/                # Setup & DI Container
+└── index.ts            # Entry Point
 ```
 
 ---
@@ -132,8 +131,3 @@ This bot is for educational and personal use. It is not affiliated with, endorse
 ---
 
 **License**: MIT
-
-## 👩‍💻 Development
-
-Want to add a new command or downloader engine?
-Check out the **[Developer Guide](docs/DEVELOPMENT.md)** for instructions on using the Dynamic Module Loader system.

@@ -1,4 +1,4 @@
-import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/module.contract';
+import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/download.contract';
 import { ttdl } from 'btch-downloader';
 import { fetchBuffer } from '../../../shared/utils/network';
 import { logger } from '../../../shared/utils/logger';

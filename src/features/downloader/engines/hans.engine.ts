@@ -1,4 +1,4 @@
-import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/module.contract';
+import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/download.contract';
 import { getProvider } from './hans-lib/core/src';
 import { fetchBuffer } from '../../../shared/utils/network';
 

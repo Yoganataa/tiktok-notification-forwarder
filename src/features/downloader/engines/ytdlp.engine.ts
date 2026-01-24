@@ -1,4 +1,4 @@
-import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/module.contract';
+import { BaseDownloadEngine, DownloadResult } from '../../../core/contracts/download.contract';
 import path from 'path';
 import fs from 'fs';
 import { create as createYoutubeDl } from 'youtube-dl-exec';
