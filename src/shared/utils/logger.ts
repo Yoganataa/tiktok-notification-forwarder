@@ -1,5 +1,5 @@
 import winston from 'winston';
-import { configManager } from '../../core/config/config';
+import { configManager } from '../../infrastructure/config/config';
 import { LOG_CONFIG } from '../../constants';
 import dotenv from 'dotenv';
 dotenv.config();
