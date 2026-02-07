@@ -3,7 +3,7 @@ import NodeCache from 'node-cache';
 import { BaseRepository } from './base.repository';
 import { UserMapping } from '../../types/database.types';
 import { RecordNotFoundError, DatabaseError } from '../errors/database.error';
-import { logger } from '../../shar../../shared/utils/logger';
+import { logger } from '../../shared/utils/logger';
 
 export class UserMappingRepository extends BaseRepository {
   private cache: NodeCache;

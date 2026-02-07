@@ -2,11 +2,11 @@
   "name": "tiktok-notification-forwarder",
   "version": "2.2.0",
   "description": "Production-ready Discord bot to forward TikTok notifications",
-  "main": "dist/index.js",
+  "main": "dist/app/index.js",
   "scripts": {
-    "build": "tsc && cp -r src/core/database/migrations dist/core/database/",
-    "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "build": "tsc && cp -r src/infrastructure/database/migrations dist/infrastructure/database/",
+    "start": "node dist/app/index.js",
+    "dev": "ts-node src/app/index.ts",
     "lint": "eslint src/**/*.ts",
     "type-check": "tsc --noEmit"
   },

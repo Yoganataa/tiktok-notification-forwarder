@@ -1,7 +1,7 @@
 import { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { database } from '../database/connection';
 import { DatabaseError } from '../errors/database.error';
-import { logger } from '../../shar../../shared/utils/logger';
+import { logger } from '../../shared/utils/logger';
 
 export abstract class BaseRepository {
   protected async query<T extends QueryResultRow = any>(
