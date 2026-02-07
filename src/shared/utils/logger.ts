@@ -1,5 +1,4 @@
 import winston from 'winston';
-import { configManager } from '../../infrastructure/config/config';
 import { LOG_CONFIG } from '../../constants';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -20,19 +19,15 @@ const productionFormat = winston.format.combine(
 );
 
 function createLogger() {
-  let config;
-  try {
-    config = configManager.get();
-  } catch {
-    config = { app: { nodeEnv: process.env.NODE_ENV || 'development', logLevel: process.env.LOG_LEVEL || 'info' } };
-  }
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const logLevel = process.env.LOG_LEVEL || 'info';
 
-  const logFormat = config.app.nodeEnv === 'production' ? productionFormat : winston.format.combine(productionFormat, developmentFormat);
+  const logFormat = nodeEnv === 'production' ? productionFormat : winston.format.combine(productionFormat, developmentFormat);
 
   return winston.createLogger({
-    level: config.app.logLevel,
+    level: logLevel,
     format: logFormat,
-    defaultMeta: { service: 'tiktok-forwarder-bot', environment: config.app.nodeEnv, version: '2.2.0' },
+    defaultMeta: { service: 'tiktok-forwarder-bot', environment: nodeEnv, version: '2.2.0' },
     transports: [
       new winston.transports.Console({ format: developmentFormat }),
       new winston.transports.File({ filename: 'logs/error.log', level: 'error', maxsize: LOG_CONFIG.MAX_SIZE, maxFiles: LOG_CONFIG.MAX_FILES, format: productionFormat }),
@@ -43,3 +38,7 @@ function createLogger() {
 }
 
 export const logger = createLogger();
+
+export function setLogLevel(level: string) {
+    logger.level = level;
+}

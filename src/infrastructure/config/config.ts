@@ -1,7 +1,7 @@
 // src/core/config/config.ts
 import dotenv from 'dotenv';
 import { ValidationError } from '../errors/validation.error';
-import { logger } from '../../shared/utils/logger';
+import { logger, setLogLevel } from '../../shared/utils/logger';
 import { SystemConfigRepository } from '../repositories/system-config.repository';
 
 dotenv.config();
@@ -131,6 +131,10 @@ class ConfigManager {
 
       if (updatesCount > 0) {
         logger.info(`Dynamic configuration: ${updatesCount} values overridden successfully.`);
+        // Update logger level if it changed (though log level is usually env only, but good practice)
+        if (this.config!.app.logLevel) {
+            setLogLevel(this.config!.app.logLevel);
+        }
       }
     } catch (error) {
       logger.error('Critical: Failed to load dynamic config from database', { 
