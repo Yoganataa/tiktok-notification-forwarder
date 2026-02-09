@@ -1,5 +1,5 @@
-import { DownloaderService } from '../domain/downloader.service';
-import { configManager } from '../infrastructure/config/config';
+import { DownloaderService } from '../services/downloader.service';
+import { configManager } from '../core/config/config';
 
 // Mock config load
 process.env.DISCORD_TOKEN='mock_token';

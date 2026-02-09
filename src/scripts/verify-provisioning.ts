@@ -1,5 +1,5 @@
-import { ForwarderService } from '../domain/forwarder.service';
-import { configManager } from '../infrastructure/config/config';
+import { ForwarderService } from '../services/forwarder.service';
+import { configManager } from '../core/config/config';
 import assert from 'assert';
 
 // Mock Config
