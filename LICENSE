@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 yoganataa
+Copyright (c) 2026 yoganataa
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,33 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+## Third-Party Credits & Licenses
+
+This project incorporates code and logic from several open-source projects. We gratefully acknowledge the following authors:
+
+### 1. tiktok-downloader
+- **Author**: [Vette1123](https://github.com/Vette1123)
+- **Repository**: [tiktok-downloader](https://github.com/Vette1123/tiktok-downloader)
+- **Integration**: Core download logic adapted in `src/features/downloader/engines/vette-lib/`.
+- **License**: MIT
+
+### 2. tiktok-dl
+- **Author**: [hansputera](https://github.com/hansputera)
+- **Repository**: [tiktok-dl](https://github.com/hansputera/tiktok-dl)
+- **Integration**: Utilized in `src/features/downloader/engines/hans-lib/`.
+- **License**: MIT
+
+### 3. btch-downloader
+- **Author**: [BochilTeam](https://github.com/BochilTeam) / [hostinger-bot](https://github.com/hostinger-bot)
+- **Repository**: [btch-downloader](https://github.com/hostinger-bot/btch-downloader)
+- **Integration**: Used via NPM package.
+- **License**: MIT
+
+### 4. youtube-dl-exec
+- **Maintainer**: [Microlink](https://github.com/microlinkhq)
+- **Repository**: [youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec)
+- **Integration**: Used for yt-dlp execution.
+- **License**: MIT
