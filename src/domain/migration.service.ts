@@ -14,7 +14,7 @@ export class MigrationService {
 
     this.migrationPath = path.join(
       __dirname,
-      '../database/migrations',
+      '../infrastructure/database/migrations',
       driverFolder
     );
   }

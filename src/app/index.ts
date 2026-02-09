@@ -3,6 +3,7 @@ import './container';
 import './types'; // Wire up container first
 import { SapphireClient } from '@sapphire/framework';
 import { GatewayIntentBits, ActivityType, Partials } from 'discord.js';
+import path from 'path';
 import { database } from '../infrastructure/database/connection';
 import { configManager } from '../infrastructure/config/config';
 import { logger } from '../shared/utils/logger';
@@ -23,7 +24,7 @@ export class AppClient extends SapphireClient {
             partials: [Partials.Message, Partials.Channel, Partials.Reaction],
             loadMessageCommandListeners: true,
             defaultPrefix: '!',
-            baseUserDirectory: __dirname,
+            baseUserDirectory: path.join(__dirname, '../presentation'),
         });
     }
 
