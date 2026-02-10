@@ -1,8 +1,7 @@
 import { Command } from '@sapphire/framework';
 import { ApplyOptions } from '@sapphire/decorators';
-import { Message, TextChannel } from 'discord.js';
+import { TextChannel } from 'discord.js';
 import { container } from '@sapphire/framework';
-import { configManager } from '../../core/config/config';
 
 @ApplyOptions<Command.Options>({
 	description: 'Reprocess a specific message (admin only)',
@@ -16,8 +15,7 @@ export class ReforgotCommand extends Command {
 				.setDescription(this.description)
 				.addStringOption((option) =>
 					option.setName('message_id').setDescription('ID of the message to reprocess').setRequired(true)
-				),
-			{ guildIds: [configManager.get().discord.coreServerId] }
+				)
 		);
 	}
 

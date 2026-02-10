@@ -19,14 +19,16 @@ export class StartCommand extends Command {
 
 	public override async chatInputRun(interaction: Command.ChatInputCommandInteraction) {
 		const embed = new EmbedBuilder()
-			.setColor('#0099ff')
-			.setTitle('Welcome to TikTok Auto-Provisioner')
-			.setDescription('I am a bot that downloads TikToks and manages channels automatically.')
+			.setColor('#3498db')
+			.setTitle('👋 Welcome to TikTok Auto-Provisioner')
+			.setDescription('I am an advanced bot designed to automate your TikTok content workflow.')
+			.setThumbnail(interaction.client.user?.displayAvatarURL() ?? '')
 			.addFields(
-				{ name: 'Features', value: '• Auto-download TikToks\n• Auto-create channels for new users\n• Queue system for reliability' },
-				{ name: 'Commands', value: 'Use `/menu` to see all available commands.' }
+				{ name: '✨ Features', value: '• **Auto-Download:** Detects and downloads TikTok links.\n• **Auto-Provisioning:** Creates channels for new users automatically.\n• **Reliability:** Built with a robust queue system.' },
+				{ name: '🚀 Getting Started', value: 'Use `/menu` to access the main dashboard or `/download` to manually download a video.' }
 			)
-			.setFooter({ text: 'Powered by Sapphire Framework' });
+			.setFooter({ text: 'Powered by Sapphire Framework' })
+            .setTimestamp();
 
 		return interaction.reply({ embeds: [embed] });
 	}
