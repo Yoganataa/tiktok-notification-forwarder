@@ -37,6 +37,32 @@ export class MenuController {
         await interaction.reply({ content: 'TikTok Forwarder Bot v2.2.0', ephemeral: true });
         return;
     }
+
+    // New Menu Handlers
+    if (id === 'menu_admin') {
+         if (!(await this.permissionService.isAdminOrHigher(interaction.user.id))) {
+            await interaction.reply({ content: '⛔ Access Denied.', ephemeral: true });
+            return;
+        }
+        await interaction.deferUpdate();
+        await this.showAdminPanel(interaction);
+        return;
+    }
+    if (id === 'menu_mappings') {
+        if (!(await this.permissionService.isAdminOrHigher(interaction.user.id))) {
+            await interaction.reply({ content: '⛔ Access Denied.', ephemeral: true });
+            return;
+        }
+        await interaction.deferUpdate();
+        await this.mappingController.showManager(interaction);
+        return;
+    }
+    if (id === 'menu_tiktok') {
+        await interaction.reply({ content: 'Use /tiktok command directly.', ephemeral: true });
+        return;
+    }
+
+    // Legacy support or internal navigation
     if (id === 'btn_open_menu') {
         if (!(await this.permissionService.isAdminOrHigher(interaction.user.id))) {
             await interaction.reply({ content: '⛔ Access Denied.', ephemeral: true });
@@ -154,25 +180,60 @@ export class MenuController {
 
   async showMainMenu(interaction: RepliableInteraction): Promise<void> {
     const embed = new EmbedBuilder()
+      .setTitle('Main Menu')
+      .setColor('#00ff00')
+      .setDescription('Select an option below to manage the bot.')
+      .addFields(
+        { name: 'Admin', value: 'Manage configuration and roles (Admin only)', inline: true },
+        { name: 'Mappings', value: 'Manage user channel mappings', inline: true },
+        { name: 'TikTok', value: 'Download or search TikToks', inline: true }
+      );
+
+    const row = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('menu_admin')
+          .setLabel('Admin Panel')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('menu_mappings')
+          .setLabel('Mappings')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('menu_tiktok')
+          .setLabel('TikTok Tools')
+          .setStyle(ButtonStyle.Success)
+      );
+
+    const payload = { embeds: [embed], components: [row] };
+
+    if (interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) {
+      if (!interaction.deferred && !interaction.replied) await (interaction as any).update(payload);
+      else await interaction.editReply(payload);
+    } else {
+      await interaction.reply({ ...payload, ephemeral: true });
+    }
+  }
+
+  async showAdminPanel(interaction: RepliableInteraction): Promise<void> {
+    const embed = new EmbedBuilder()
       .setTitle('🎛️ System Control Panel')
       .setColor(0x2b2d31)
       .setDescription('Select a module to manage:')
       .addFields(
-        { name: '🗺️ Mappings', value: 'Manage TikTok users', inline: true },
         { name: '⚙️ Environment', value: 'Edit configuration', inline: true },
         { name: '👥 Roles', value: 'Manage staff', inline: true },
         { name: '🖥️ Servers', value: 'View guilds', inline: true }
-      )
-      .setTimestamp();
+      );
 
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('nav_mappings').setLabel('Mappings').setStyle(ButtonStyle.Success).setEmoji('🗺️'),
-      new ButtonBuilder().setCustomId('nav_env').setLabel('Environment').setStyle(ButtonStyle.Secondary).setEmoji('⚙️')
+      new ButtonBuilder().setCustomId('nav_env').setLabel('Environment').setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
+      new ButtonBuilder().setCustomId('nav_roles').setLabel('Roles').setStyle(ButtonStyle.Primary).setEmoji('👥'),
+      new ButtonBuilder().setCustomId('nav_servers').setLabel('Servers').setStyle(ButtonStyle.Secondary).setEmoji('🖥️')
     );
 
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('nav_roles').setLabel('Roles').setStyle(ButtonStyle.Primary).setEmoji('👥'),
-      new ButtonBuilder().setCustomId('nav_servers').setLabel('Servers').setStyle(ButtonStyle.Secondary).setEmoji('🖥️')
+        new ButtonBuilder().setCustomId('nav_back_main').setLabel('Back to Menu').setStyle(ButtonStyle.Secondary).setEmoji('⬅️')
     );
 
     const payload = { embeds: [embed], components: [row1, row2] };
@@ -217,7 +278,7 @@ export class MenuController {
       .setDescription(description);
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('nav_back_main').setLabel('Back to Menu').setStyle(ButtonStyle.Secondary).setEmoji('⬅️')
+      new ButtonBuilder().setCustomId('menu_admin').setLabel('Back to Admin').setStyle(ButtonStyle.Secondary).setEmoji('⬅️')
     );
 
     await interaction.editReply({ embeds: [embed], components: [row] });
