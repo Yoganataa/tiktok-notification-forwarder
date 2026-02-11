@@ -127,25 +127,49 @@ export class MoveCommand extends Command {
 				}
 
 				try {
-					// 1. Prepare Content (Copy)
-					const mimicEmbed = new EmbedBuilder()
-						.setAuthor({ name: msg.author.username, iconURL: msg.author.displayAvatarURL() })
-						.setDescription(msg.content || '*[No Text Content]*')
-						.setTimestamp(msg.createdTimestamp)
-						.setFooter({ text: `Moved from #${sourceChannel.name}` });
+                    let finalEmbeds: EmbedBuilder[] = [];
+                    let finalContent: string | undefined = undefined;
 
-                    // Handle existing embeds (Option A: Mimic + Original Embeds)
-                    const originalEmbeds = msg.embeds.map(e => EmbedBuilder.from(e));
+                    // Condition A: Message ALREADY has embeds (Bot, Link Preview, etc.)
+                    if (msg.embeds.length > 0) {
+                        // Clone the first embed and inject attribution
+                        const firstEmbed = EmbedBuilder.from(msg.embeds[0]);
+                        firstEmbed.setFooter({ text: `Moved from #${sourceChannel.name} • Author: ${msg.author.username}`, iconURL: msg.author.displayAvatarURL() });
+                        firstEmbed.setTimestamp(msg.createdTimestamp);
 
-                    // Truncate existing embeds to ensure total length <= 10
-                    // We need 1 slot for mimicEmbed, so we can take up to 9 original embeds.
-                    const finalEmbeds = [mimicEmbed, ...originalEmbeds.slice(0, 9)];
+                        // Keep subsequent embeds (limit total to 10)
+                        const otherEmbeds = msg.embeds.slice(1).map(e => EmbedBuilder.from(e));
+
+                        // Combine: [ModifiedFirst, ...Others] (sliced to max 9 others to fit 10 total)
+                        finalEmbeds = [firstEmbed, ...otherEmbeds.slice(0, 9)];
+
+                        // Pass text content if it exists
+                        if (msg.content && msg.content.length > 0) {
+                            finalContent = msg.content;
+                        }
+
+                    }
+                    // Condition B: Text/Media only (No existing embeds)
+                    else {
+                        const mimicEmbed = new EmbedBuilder()
+                            .setAuthor({ name: msg.author.username, iconURL: msg.author.displayAvatarURL() })
+                            .setDescription(msg.content || '*[No Text Content]*')
+                            .setTimestamp(msg.createdTimestamp)
+                            .setFooter({ text: `Moved from #${sourceChannel.name}` });
+
+                        finalEmbeds = [mimicEmbed];
+                        // Content is inside the embed description, so payload content is undefined
+                    }
 
 					// Re-upload attachments
 					const files = msg.attachments.map(att => new AttachmentBuilder(att.url, { name: att.name }));
 
 					// 2. Send to Destination
-					await targetChannel.send({ embeds: finalEmbeds, files: files });
+					await targetChannel.send({
+                        content: finalContent, // undefined or string
+                        embeds: finalEmbeds,
+                        files: files
+                    });
 
 					// 3. Delete Original (Only if send succeeded)
 					await msg.delete();
