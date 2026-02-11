@@ -128,17 +128,24 @@ export class MoveCommand extends Command {
 
 				try {
 					// 1. Prepare Content (Copy)
-					const embed = new EmbedBuilder()
+					const mimicEmbed = new EmbedBuilder()
 						.setAuthor({ name: msg.author.username, iconURL: msg.author.displayAvatarURL() })
 						.setDescription(msg.content || '*[No Text Content]*')
 						.setTimestamp(msg.createdTimestamp)
 						.setFooter({ text: `Moved from #${sourceChannel.name}` });
 
+                    // Handle existing embeds (Option A: Mimic + Original Embeds)
+                    const originalEmbeds = msg.embeds.map(e => EmbedBuilder.from(e));
+
+                    // Truncate existing embeds to ensure total length <= 10
+                    // We need 1 slot for mimicEmbed, so we can take up to 9 original embeds.
+                    const finalEmbeds = [mimicEmbed, ...originalEmbeds.slice(0, 9)];
+
 					// Re-upload attachments
 					const files = msg.attachments.map(att => new AttachmentBuilder(att.url, { name: att.name }));
 
 					// 2. Send to Destination
-					await targetChannel.send({ embeds: [embed], files: files });
+					await targetChannel.send({ embeds: finalEmbeds, files: files });
 
 					// 3. Delete Original (Only if send succeeded)
 					await msg.delete();
