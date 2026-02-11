@@ -26,24 +26,61 @@ export class DownloaderService {
     this.engines.set(engine.name, engine);
   }
 
+  /**
+   * Returns a list of all registered engine names.
+   */
+  getRegisteredEngineNames(): string[] {
+      return Array.from(this.engines.keys());
+  }
+
   async download(url: string): Promise<DownloadResult> {
-    let engineName = await this.configRepo.get('DOWNLOAD_ENGINE') || 'vette';
-    let subType = '';
+    // 1. Load configuration for Primary, Fallback 1, and Fallback 2
+    const primaryEngineName = await this.configRepo.get('DOWNLOAD_ENGINE') || 'vette';
+    const fallback1 = await this.configRepo.get('DOWNLOAD_ENGINE_FALLBACK_1') || 'none';
+    const fallback2 = await this.configRepo.get('DOWNLOAD_ENGINE_FALLBACK_2') || 'none';
 
-    if (engineName.includes(':')) {
-        [engineName, subType] = engineName.split(':');
+    // 2. Construct execution list, filtering 'none' and duplicates
+    const executionList = [primaryEngineName, fallback1, fallback2]
+        .filter(name => name && name !== 'none')
+        .filter((name, index, self) => self.indexOf(name) === index); // Unique only
+
+    let lastError: Error | null = null;
+
+    // 3. Iterate through execution list
+    for (const engineConfig of executionList) {
+        let engineName = engineConfig;
+        let subType = '';
+
+        if (engineName.includes(':')) {
+            [engineName, subType] = engineName.split(':');
+        }
+
+        const engine = this.engines.get(engineName);
+
+        if (!engine) {
+            logger.warn(`Engine ${engineName} not found, skipping...`);
+            continue;
+        }
+
+        // Configure subtype if applicable (e.g. for Hans engine)
+        if (engine instanceof HansEngine && subType) {
+            (engine as HansEngine).setProvider(subType);
+        }
+
+        try {
+            logger.info(`Attempting download using engine: ${engineName}${subType ? ` (${subType})` : ''}`);
+            const result = await engine.download(url);
+
+            // If successful, return immediately
+            return result;
+        } catch (error) {
+            lastError = error as Error;
+            logger.warn(`Engine ${engineName} failed: ${(error as Error).message}. Switching to next fallback...`);
+            // Continue to next engine
+        }
     }
 
-    const engine = this.engines.get(engineName);
-    if (!engine) {
-      throw new Error(`Engine ${engineName} not found`);
-    }
-
-    if (engine instanceof HansEngine && subType) {
-        (engine as HansEngine).setProvider(subType);
-    }
-
-    logger.info(`Downloading using engine: ${engineName} (${subType || 'default'})`);
-    return await engine.download(url);
+    // 4. If all failed, throw the last error
+    throw new Error(`All configured download engines failed. Last error: ${lastError?.message || 'Unknown error'}`);
   }
 }

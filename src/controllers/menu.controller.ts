@@ -164,7 +164,9 @@ export class MenuController {
   }
 
   async handleSelectMenu(interaction: StringSelectMenuInteraction): Promise<void> {
-    if (interaction.customId === 'select_engine') {
+    const id = interaction.customId;
+
+    if (id.startsWith('select_engine')) {
         await interaction.deferUpdate();
         await this.configController.handleEngineSelect(interaction);
         return;

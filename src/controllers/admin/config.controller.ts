@@ -10,10 +10,12 @@ import {
   TextInputStyle,
   RepliableInteraction,
   StringSelectMenuBuilder,
-  StringSelectMenuInteraction
+  StringSelectMenuInteraction,
+  StringSelectMenuOptionBuilder
 } from 'discord.js';
 import { SystemConfigRepository } from '../../repositories/system-config.repository';
 import { configManager } from '../../core/config/config';
+import { container } from '@sapphire/framework';
 
 export class ConfigController {
   constructor(
@@ -23,41 +25,92 @@ export class ConfigController {
 
   async showEnvironmentPage(interaction: ButtonInteraction | RepliableInteraction | StringSelectMenuInteraction): Promise<void> {
     const config = configManager.get();
-    const engineConfig = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'vette';
+    const primaryEngine = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'vette';
+    const fallback1 = await this.systemConfigRepo.get('DOWNLOAD_ENGINE_FALLBACK_1') || 'none';
+    const fallback2 = await this.systemConfigRepo.get('DOWNLOAD_ENGINE_FALLBACK_2') || 'none';
     const autoDl = (await this.systemConfigRepo.get('AUTO_DOWNLOAD')) !== 'false';
 
     const embed = new EmbedBuilder()
-      .setTitle('⚙️ Environment Configuration')
+      .setTitle('⚙️ Environment & Engine Configuration')
       .setColor(0x2b2d31)
-      .setDescription('Current system configuration values (Active).')
+      .setDescription('Manage your bot settings and download strategies below.')
       .addFields(
         { name: 'Source Bots', value: `\`${config.bot.sourceBotIds.join(', ')}\`` },
-        { name: 'Fallback Channel', value: `\`${config.bot.fallbackChannelId}\``, inline: true },
-        { name: 'Auto-Create Category', value: `\`${config.bot.autoCreateCategoryId}\``, inline: true },
         { name: 'Core Server', value: `\`${config.discord.coreServerId}\``, inline: true },
-        { name: 'DB Connections', value: `Min: ${config.database.minConnections} / Max: ${config.database.maxConnections}`, inline: true },
-        { name: '📥 Download Engine', value: engineConfig, inline: true },
-        { name: '🤖 Auto Download', value: autoDl ? 'Enabled' : 'Disabled', inline: true }
+        { name: 'Bot State', value: autoDl ? '🟢 Auto-Download ON' : '🔴 Auto-Download OFF', inline: true },
+        { name: 'Download Strategy', value: `1. **${primaryEngine}**\n2. ${fallback1}\n3. ${fallback2}`, inline: false }
       );
 
-    const engineSelect = new StringSelectMenuBuilder()
-        .setCustomId('select_engine')
-        .setPlaceholder('Select Download Engine')
-        .addOptions([
-            { label: 'Vette Downloader (Default)', value: 'vette', description: 'Recommended', default: engineConfig === 'vette' },
-            { label: 'Btch Downloader', value: 'btch', description: 'Alternative', default: engineConfig === 'btch' },
-            { label: 'YT-DLP', value: 'yt-dlp', description: 'Reliable binary', default: engineConfig === 'yt-dlp' },
+    // Get all available engines dynamically
+    const availableEngines = container.services.downloader.getRegisteredEngineNames();
 
-            // Hans Sub-engines (Popular ones)
-            { label: 'Hans (Native)', value: 'hans:native', description: 'Direct Scraping', default: engineConfig === 'hans:native' },
-            { label: 'Hans (Snaptik)', value: 'hans:snaptik', description: 'Snaptik Provider', default: engineConfig === 'hans:snaptik' },
-            { label: 'Hans (Tikmate)', value: 'hans:tikmate', description: 'Tikmate Provider', default: engineConfig === 'hans:tikmate' },
-            { label: 'Hans (MusicalDown)', value: 'hans:musicalydown', description: 'MusicalyDown Provider', default: engineConfig === 'hans:musicalydown' },
-            { label: 'Hans (TTDownloader)', value: 'hans:ttdownloader', description: 'TTDownloader Provider', default: engineConfig === 'hans:ttdownloader' },
-            { label: 'Hans (FastTok)', value: 'hans:fasttoksave', description: 'FastTok Provider', default: engineConfig === 'hans:fasttoksave' },
-        ]);
+    // Helper to build options
+    const buildOptions = (selectedValue: string, excludeValues: string[], includeNone: boolean) => {
+        const options: StringSelectMenuOptionBuilder[] = [];
 
-    const rowSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(engineSelect);
+        if (includeNone) {
+            options.push(new StringSelectMenuOptionBuilder()
+                .setLabel('None')
+                .setValue('none')
+                .setDescription('Disable this fallback slot')
+                .setDefault(selectedValue === 'none'));
+        }
+
+        availableEngines.forEach(engine => {
+            if (!excludeValues.includes(engine)) {
+                options.push(new StringSelectMenuOptionBuilder()
+                    .setLabel(engine)
+                    .setValue(engine)
+                    .setDefault(selectedValue === engine));
+            }
+        });
+
+        // Add specific Hans subtypes if 'hans' is available
+        if (availableEngines.includes('hans')) {
+            const hansTypes = [
+                { val: 'hans:native', label: 'Hans (Native)' },
+                { val: 'hans:snaptik', label: 'Hans (Snaptik)' },
+                { val: 'hans:tikmate', label: 'Hans (Tikmate)' },
+                { val: 'hans:musicalydown', label: 'Hans (MusicalDown)' },
+                { val: 'hans:ttdownloader', label: 'Hans (TTDownloader)' },
+                { val: 'hans:fasttoksave', label: 'Hans (FastTok)' }
+            ];
+
+            hansTypes.forEach(t => {
+                 if (!excludeValues.includes(t.val)) {
+                    options.push(new StringSelectMenuOptionBuilder()
+                        .setLabel(t.label)
+                        .setValue(t.val)
+                        .setDefault(selectedValue === t.val));
+                 }
+            });
+        }
+
+        return options;
+    };
+
+    // 1. Primary Engine Select (Excludes selections from Fallback 1 & 2 if not 'none')
+    const primarySelect = new StringSelectMenuBuilder()
+        .setCustomId('select_engine_primary')
+        .setPlaceholder('Select Primary Engine')
+        .addOptions(buildOptions(primaryEngine, [fallback1, fallback2].filter(v => v !== 'none'), false));
+
+    // 2. Fallback 1 Select (Excludes Primary & Fallback 2)
+    const fallback1Select = new StringSelectMenuBuilder()
+        .setCustomId('select_engine_fallback_1')
+        .setPlaceholder('Select Fallback Engine 1')
+        .addOptions(buildOptions(fallback1, [primaryEngine, fallback2].filter(v => v !== 'none'), true));
+
+    // 3. Fallback 2 Select (Excludes Primary & Fallback 1)
+    const fallback2Select = new StringSelectMenuBuilder()
+        .setCustomId('select_engine_fallback_2')
+        .setPlaceholder('Select Fallback Engine 2')
+        .addOptions(buildOptions(fallback2, [primaryEngine, fallback1].filter(v => v !== 'none'), true));
+
+
+    const rowPrimary = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(primarySelect);
+    const rowFallback1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(fallback1Select);
+    const rowFallback2 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(fallback2Select);
 
     const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('btn_edit_env').setLabel('Edit Env').setStyle(ButtonStyle.Primary).setEmoji('📝'),
@@ -65,7 +118,9 @@ export class ConfigController {
       new ButtonBuilder().setCustomId('nav_back_main').setLabel('Back to Menu').setStyle(ButtonStyle.Secondary).setEmoji('⬅️')
     );
 
-    const payload = { embeds: [embed], components: [rowSelect, rowButtons] };
+    const components = [rowPrimary, rowFallback1, rowFallback2, rowButtons];
+
+    const payload = { embeds: [embed], components: components };
 
     if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
         if (!interaction.deferred && !interaction.replied) await (interaction as any).update(payload);
@@ -76,7 +131,17 @@ export class ConfigController {
   }
 
   async handleEngineSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-      await this.systemConfigRepo.set('DOWNLOAD_ENGINE', interaction.values[0]);
+      const selectedValue = interaction.values[0];
+      const customId = interaction.customId;
+
+      if (customId === 'select_engine_primary') {
+          await this.systemConfigRepo.set('DOWNLOAD_ENGINE', selectedValue);
+      } else if (customId === 'select_engine_fallback_1') {
+          await this.systemConfigRepo.set('DOWNLOAD_ENGINE_FALLBACK_1', selectedValue);
+      } else if (customId === 'select_engine_fallback_2') {
+          await this.systemConfigRepo.set('DOWNLOAD_ENGINE_FALLBACK_2', selectedValue);
+      }
+
       await this.onConfigReload();
       await this.showEnvironmentPage(interaction);
   }
