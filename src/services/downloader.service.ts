@@ -5,6 +5,7 @@ import HansEngine from './engines/hans.engine';
 import VetteEngine from './engines/vette.engine';
 import BtchEngine from './engines/btch.engine';
 import YtDlpEngine from './engines/ytdlp.engine';
+import DevestEngine from './engines/devest.engine';
 
 export class DownloaderService {
   private engines: Map<string, BaseDownloadEngine> = new Map();
@@ -18,6 +19,7 @@ export class DownloaderService {
      this.registerEngine(new HansEngine());
      this.registerEngine(new BtchEngine());
      this.registerEngine(new YtDlpEngine());
+     this.registerEngine(new DevestEngine());
 
      logger.info(`[DownloaderService] Initialized with ${this.engines.size} engines.`);
   }
@@ -62,9 +64,11 @@ export class DownloaderService {
             continue;
         }
 
-        // Configure subtype if applicable (e.g. for Hans engine)
+        // Configure subtype if applicable (e.g. for Hans engine or Devest engine)
         if (engine instanceof HansEngine && subType) {
             (engine as HansEngine).setProvider(subType);
+        } else if (engine instanceof DevestEngine && subType) {
+            (engine as DevestEngine).setMode(subType);
         }
 
         try {

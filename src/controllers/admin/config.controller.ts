@@ -86,6 +86,23 @@ export class ConfigController {
             });
         }
 
+        // Add specific Devest subtypes if 'devest' is available
+        if (availableEngines.includes('devest')) {
+            const devestTypes = [
+                { val: 'devest:non-hd', label: 'Devest (Non-HD)' },
+                { val: 'devest:hd', label: 'Devest (HD)' }
+            ];
+
+            devestTypes.forEach(t => {
+                 if (!excludeValues.includes(t.val)) {
+                    options.push(new StringSelectMenuOptionBuilder()
+                        .setLabel(t.label)
+                        .setValue(t.val)
+                        .setDefault(selectedValue === t.val));
+                 }
+            });
+        }
+
         return options;
     };
 
