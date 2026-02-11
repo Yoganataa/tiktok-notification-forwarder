@@ -16,7 +16,18 @@ export class ReadyListener extends Listener {
         const { username, id } = client.user!;
         logger.info(`✅ Bot authenticated as ${username} (${id})`);
 
+        await this.cleanGlobalCommands(client);
         await this.logServerInfo(client);
+    }
+
+    private async cleanGlobalCommands(client: Client): Promise<void> {
+        try {
+            logger.info('🧹 Cleaning global application commands...');
+            await client.application?.commands.set([]);
+            logger.info('✅ Global commands cleaned successfully.');
+        } catch (error) {
+            logger.error('❌ Failed to clean global commands', { error: (error as Error).message });
+        }
     }
 
     private async logServerInfo(client: Client): Promise<void> {

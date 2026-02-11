@@ -1,4 +1,3 @@
-// src/core/config/config.ts
 import dotenv from 'dotenv';
 import { ValidationError } from '../errors/validation.error';
 import { logger, setLogLevel } from '../../shared/utils/logger';
@@ -17,6 +16,7 @@ export interface AppConfig {
     clientId: string;
     ownerId: string;
     coreServerId: string;
+    extraGuildIds: string[];
   };
   bot: {
     sourceBotIds: string[];
@@ -61,6 +61,7 @@ class ConfigManager {
         clientId: process.env.CLIENT_ID!,
         ownerId: process.env.OWNER_ID!,
         coreServerId: process.env.CORE_SERVER_ID || '',
+        extraGuildIds: this.parseList(process.env.EXTRA_GUILD_IDS || ''),
       },
       bot: {
         sourceBotIds: this.parseList(process.env.SOURCE_BOT_IDS || ''),
@@ -118,6 +119,10 @@ class ConfigManager {
             this.config!.discord.coreServerId = value; 
             updatesCount++; 
             break;
+          case 'EXTRA_GUILD_IDS':
+            this.config!.discord.extraGuildIds = this.parseList(value);
+            updatesCount++;
+            break;
           case 'DB_MAX_CONNECTIONS': 
             this.config!.database.maxConnections = parseInt(value); 
             updatesCount++; 
@@ -150,6 +155,7 @@ class ConfigManager {
       'FALLBACK_CHANNEL_ID': config.bot.fallbackChannelId,
       'AUTO_CREATE_CATEGORY_ID': config.bot.autoCreateCategoryId,
       'CORE_SERVER_ID': config.discord.coreServerId,
+      'EXTRA_GUILD_IDS': config.discord.extraGuildIds.join(','),
       'DB_MAX_CONNECTIONS': config.database.maxConnections.toString(),
       'DB_MIN_CONNECTIONS': config.database.minConnections.toString()
     };

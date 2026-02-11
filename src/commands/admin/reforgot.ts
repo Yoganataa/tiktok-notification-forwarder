@@ -2,6 +2,7 @@ import { Command } from '@sapphire/framework';
 import { ApplyOptions } from '@sapphire/decorators';
 import { TextChannel } from 'discord.js';
 import { container } from '@sapphire/framework';
+import { configManager } from '../../core/config/config';
 
 @ApplyOptions<Command.Options>({
 	description: 'Reprocess a specific message (admin only)',
@@ -9,13 +10,21 @@ import { container } from '@sapphire/framework';
 })
 export class ReforgotCommand extends Command {
 	public override registerApplicationCommands(registry: Command.Registry) {
+        const config = configManager.get();
+        // Register in both Core Server and Extra Guilds
+        const allowedGuilds = [
+            config.discord.coreServerId,
+            ...config.discord.extraGuildIds
+        ].filter(Boolean); // Remove empty strings if any
+
 		registry.registerChatInputCommand((builder) =>
 			builder
 				.setName(this.name)
 				.setDescription(this.description)
 				.addStringOption((option) =>
 					option.setName('message_id').setDescription('ID of the message to reprocess').setRequired(true)
-				)
+				),
+            { guildIds: allowedGuilds }
 		);
 	}
 
