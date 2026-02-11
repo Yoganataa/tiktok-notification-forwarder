@@ -11,11 +11,11 @@ import { configManager } from '../../core/config/config';
 export class ReforgotCommand extends Command {
 	public override registerApplicationCommands(registry: Command.Registry) {
         const config = configManager.get();
-        // Register in both Core Server and Extra Guilds
-        const allowedGuilds = [
+        // Register in both Core Server and Extra Guilds (Unique Set)
+        const allowedGuilds = [...new Set([
             config.discord.coreServerId,
             ...config.discord.extraGuildIds
-        ].filter(Boolean); // Remove empty strings if any
+        ].filter(Boolean))];
 
 		registry.registerChatInputCommand((builder) =>
 			builder
