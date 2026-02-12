@@ -1,1 +1,1 @@
-declare module 'btch-downloader';
+// declare module 'btch-downloader';

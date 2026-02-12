@@ -56,9 +56,7 @@ export class StartupService {
   private static async verifyDependencies(): Promise<void> {
     // Check for runtime requirements that might be missing in some environments
     try {
-        require('vm2');
         require('cheerio');
-        require('btch-downloader');
         require('youtube-dl-exec');
         logger.info('✅ Critical runtime dependencies verified.');
     } catch (error) {

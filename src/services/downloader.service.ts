@@ -1,9 +1,7 @@
 import { BaseDownloadEngine, DownloadResult } from '../core/contracts/download.contract';
 import { SystemConfigRepository } from '../repositories/system-config.repository';
 import { logger } from '../shared/utils/logger';
-import HansEngine from './engines/hans.engine';
 import VetteEngine from './engines/vette.engine';
-import BtchEngine from './engines/btch.engine';
 import YtDlpEngine from './engines/ytdlp.engine';
 import DevestEngine from './engines/devest.engine';
 
@@ -16,8 +14,6 @@ export class DownloaderService {
      if (this.engines.size > 0) return;
 
      this.registerEngine(new VetteEngine());
-     this.registerEngine(new HansEngine());
-     this.registerEngine(new BtchEngine());
      this.registerEngine(new YtDlpEngine());
      this.registerEngine(new DevestEngine());
 
@@ -64,10 +60,6 @@ export class DownloaderService {
             continue;
         }
 
-        // Configure subtype if applicable (e.g. for Hans engine)
-        if (engine instanceof HansEngine && subType) {
-            (engine as HansEngine).setProvider(subType);
-        }
         // Note: Devest engine is now auto-managed internally, no need to set mode externally.
 
         try {
