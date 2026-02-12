@@ -22,6 +22,7 @@ export interface AppConfig {
     sourceBotIds: string[];
     fallbackChannelId: string;
     autoCreateCategoryId: string;
+    manualDownloadMode: boolean;
   };
   database: {
     driver: DatabaseDriver;
@@ -67,6 +68,7 @@ class ConfigManager {
         sourceBotIds: this.parseList(process.env.SOURCE_BOT_IDS || ''),
         fallbackChannelId: process.env.FALLBACK_CHANNEL_ID || '0',
         autoCreateCategoryId: process.env.AUTO_CREATE_CATEGORY_ID || '0',
+        manualDownloadMode: process.env.MANUAL_DOWNLOAD_MODE === 'true',
       },
       database: {
         driver: driver,
@@ -123,6 +125,10 @@ class ConfigManager {
             this.config!.discord.extraGuildIds = this.parseList(value);
             updatesCount++;
             break;
+          case 'MANUAL_DOWNLOAD_MODE':
+            this.config!.bot.manualDownloadMode = value === 'true';
+            updatesCount++;
+            break;
           case 'DB_MAX_CONNECTIONS': 
             this.config!.database.maxConnections = parseInt(value); 
             updatesCount++; 
@@ -156,6 +162,7 @@ class ConfigManager {
       'AUTO_CREATE_CATEGORY_ID': config.bot.autoCreateCategoryId,
       'CORE_SERVER_ID': config.discord.coreServerId,
       'EXTRA_GUILD_IDS': config.discord.extraGuildIds.join(','),
+      'MANUAL_DOWNLOAD_MODE': config.bot.manualDownloadMode.toString(),
       'DB_MAX_CONNECTIONS': config.database.maxConnections.toString(),
       'DB_MIN_CONNECTIONS': config.database.minConnections.toString()
     };

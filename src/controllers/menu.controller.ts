@@ -7,6 +7,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   RepliableInteraction,
+  ChannelSelectMenuInteraction
 } from 'discord.js';
 import { PermissionService } from '../services/permission.service';
 import { SystemConfigRepository } from '../repositories/system-config.repository';
@@ -163,20 +164,20 @@ export class MenuController {
     }
   }
 
-  async handleSelectMenu(interaction: StringSelectMenuInteraction): Promise<void> {
+  async handleSelectMenu(interaction: StringSelectMenuInteraction | ChannelSelectMenuInteraction): Promise<void> {
     const id = interaction.customId;
 
     if (id.startsWith('select_engine')) {
         await interaction.deferUpdate();
-        await this.configController.handleEngineSelect(interaction);
+        await this.configController.handleEngineSelect(interaction as StringSelectMenuInteraction);
         return;
     }
     if (interaction.customId === 'select_staff_manage') {
         await interaction.deferUpdate();
-        await this.roleController.handleSelectMenu(interaction);
+        await this.roleController.handleSelectMenu(interaction as StringSelectMenuInteraction);
     } else if (interaction.customId === 'select_mapping_manage') {
         await interaction.deferUpdate();
-        await this.mappingController.handleSelectMenu(interaction);
+        await this.mappingController.handleSelectMenu(interaction as StringSelectMenuInteraction);
     }
   }
 

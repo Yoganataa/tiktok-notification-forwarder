@@ -2,14 +2,15 @@ import { Command } from '@sapphire/framework';
 import { ApplyOptions } from '@sapphire/decorators';
 import { container } from '@sapphire/framework';
 import { configManager } from '../../core/config/config';
-import { sendChunkedReply } from '../../shared/utils/discord-chunker';
-import { AttachmentBuilder } from 'discord.js';
+import { DownloadController } from '../../controllers/download.controller';
 
 @ApplyOptions<Command.Options>({
 	description: 'Download a TikTok video',
 	preconditions: ['CoreServerOnly']
 })
 export class DownloadCommand extends Command {
+    private controller = new DownloadController();
+
 	public override registerApplicationCommands(registry: Command.Registry) {
 		registry.registerChatInputCommand((builder) =>
 			builder
@@ -23,55 +24,19 @@ export class DownloadCommand extends Command {
 	}
 
 	public override async chatInputRun(interaction: Command.ChatInputCommandInteraction) {
+        // Check Manual Download Mode
+        // We check the DB directly to get the latest override, fallback to config default
+        const manualMode = await container.repos.systemConfig.get('MANUAL_DOWNLOAD_MODE');
+        const isManualMode = manualMode === 'true'; // string storage in DB
+
+        if (isManualMode) {
+            return interaction.reply({
+                content: '🚫 **Manual Download Mode is Enabled.**\nPlease paste the TikTok link directly into an allowed channel to download it.',
+                ephemeral: true
+            });
+        }
+
 		const url = interaction.options.getString('url', true);
-		await interaction.deferReply();
-
-		try {
-			const downloader = container.services.downloader;
-			const result = await downloader.download(url);
-
-			if (result) {
-				const { buffer, buffers, type, urls } = result;
-				const attachments: AttachmentBuilder[] = [];
-				let tooLarge = false;
-
-				// 1. Handle Slideshow (Multiple Buffers)
-				if (type === 'image' && buffers && buffers.length > 0) {
-					for (let i = 0; i < buffers.length; i++) {
-						const buf = buffers[i];
-						if (buf.length > 25 * 1024 * 1024) {
-							tooLarge = true;
-							break;
-						}
-						attachments.push(new AttachmentBuilder(buf, { name: `image_${i + 1}.png` }));
-					}
-				}
-				// 2. Handle Single File (Video/Image)
-				else if (buffer) {
-					if (buffer.length > 25 * 1024 * 1024) {
-						tooLarge = true;
-					} else {
-						const ext = type === 'video' ? 'mp4' : 'png';
-						attachments.push(new AttachmentBuilder(buffer, { name: `tiktok.${ext}` }));
-					}
-				} else {
-					tooLarge = true; // No buffer available
-				}
-
-				// 3. Send Response
-				if (!tooLarge && attachments.length > 0) {
-					await sendChunkedReply(interaction, 'Downloaded!', [], attachments);
-				} else {
-					await interaction.editReply({
-						content: `Video too large or no buffer. Here are the links:\n${urls.join('\n')}`
-					});
-				}
-
-			} else {
-				await interaction.editReply('Failed to download video.');
-			}
-		} catch (error) {
-			await interaction.editReply(`Error: ${(error as Error).message}`);
-		}
+        await this.controller.handleDownloadRequest(interaction, url);
 	}
 }
