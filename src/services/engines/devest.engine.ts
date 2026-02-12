@@ -3,6 +3,15 @@ import { BaseDownloadEngine, DownloadResult } from '../../core/contracts/downloa
 import axios, { AxiosInstance } from 'axios';
 import { logger } from '../../shared/utils/logger';
 
+// Universal Regex Patterns for TikTok Media ID Extraction
+const TIKTOK_PATTERNS = [
+  /\/video\/(\d+)/,                 // 1. Standard Web
+  /\/photo\/(\d+)/,                 // 2. Photo Mode
+  /\/v\/(\d+)/,                     // 3. Mobile/Raw
+  /\/t\/(\d+)/,                     // 4. Shortened redirect target
+  /\/(\d{19,})(?:[^\d]|$)/          // 5. Generic 19+ digit ID
+];
+
 export default class DevestEngine extends BaseDownloadEngine {
     private client: AxiosInstance;
 
@@ -46,11 +55,13 @@ export default class DevestEngine extends BaseDownloadEngine {
 
     private async getMediaId(url: string): Promise<string> {
         const finalUrl = await this.getRedirectUrl(url);
-        const videoMatch = finalUrl.match(/\/video\/(\d+)/);
-        if (videoMatch) return videoMatch[1];
 
-        const photoMatch = finalUrl.match(/\/photo\/(\d+)/);
-        if (photoMatch) return photoMatch[1];
+        for (const pattern of TIKTOK_PATTERNS) {
+            const match = finalUrl.match(pattern);
+            if (match && match[1]) {
+                return match[1];
+            }
+        }
 
         throw new Error(`Could not extract Media ID from URL: ${finalUrl}`);
     }
