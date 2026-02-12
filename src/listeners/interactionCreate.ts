@@ -15,7 +15,7 @@ export class InteractionCreateListener extends Listener {
 
 			if (interaction.isButton()) {
                 await container.controllers.menu.handleButton(interaction);
-            } else if (interaction.isStringSelectMenu()) {
+            } else if (interaction.isAnySelectMenu()) {
                 await container.controllers.menu.handleSelectMenu(interaction);
             } else if (interaction.isModalSubmit()) {
                 await container.controllers.menu.handleModal(interaction);

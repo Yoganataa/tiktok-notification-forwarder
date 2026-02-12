@@ -7,7 +7,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   RepliableInteraction,
-  ChannelSelectMenuInteraction
+  ChannelSelectMenuInteraction,
+  AnySelectMenuInteraction
 } from 'discord.js';
 import { PermissionService } from '../services/permission.service';
 import { SystemConfigRepository } from '../repositories/system-config.repository';
@@ -174,7 +175,7 @@ export class MenuController {
     }
   }
 
-  async handleSelectMenu(interaction: StringSelectMenuInteraction | ChannelSelectMenuInteraction): Promise<void> {
+  async handleSelectMenu(interaction: AnySelectMenuInteraction): Promise<void> {
     const id = interaction.customId;
 
     if (id.startsWith('select_engine')) {
