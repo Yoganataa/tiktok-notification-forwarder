@@ -2,15 +2,12 @@ import { Command } from '@sapphire/framework';
 import { ApplyOptions } from '@sapphire/decorators';
 import { container } from '@sapphire/framework';
 import { configManager } from '../../core/config/config';
-import { DownloadController } from '../../controllers/download.controller';
 
 @ApplyOptions<Command.Options>({
 	description: 'Download a TikTok video',
 	preconditions: ['CoreServerOnly']
 })
 export class DownloadCommand extends Command {
-    private controller = new DownloadController();
-
 	public override registerApplicationCommands(registry: Command.Registry) {
 		registry.registerChatInputCommand((builder) =>
 			builder
@@ -37,6 +34,6 @@ export class DownloadCommand extends Command {
         }
 
 		const url = interaction.options.getString('url', true);
-        await this.controller.handleDownloadRequest(interaction, url);
+        await container.controllers.download.handleDownloadRequest(interaction, url);
 	}
 }

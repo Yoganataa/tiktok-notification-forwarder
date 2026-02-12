@@ -11,6 +11,7 @@ import { MenuController } from './controllers/menu.controller';
 import { MappingController } from './controllers/admin/mapping.controller';
 import { ConfigController } from './controllers/admin/config.controller';
 import { RoleController } from './controllers/admin/role.controller';
+import { DownloadController } from './controllers/download.controller';
 
 declare module '@sapphire/pieces' {
     interface Container {
@@ -32,6 +33,7 @@ declare module '@sapphire/pieces' {
             mapping: MappingController;
             config: ConfigController;
             role: RoleController;
+            download: DownloadController;
         };
     }
 }

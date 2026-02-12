@@ -1,12 +1,9 @@
 import { Listener } from '@sapphire/framework';
 import { Message } from 'discord.js';
 import { container } from '@sapphire/framework';
-import { validateUrl } from '../../services/engines/vette-lib/validator';
-import { DownloadController } from '../../controllers/download.controller';
+import { validateUrl, extractTikTokUrl } from '../../services/engines/vette-lib/validator';
 
 export class MessageCreateListener extends Listener {
-    private downloadController = new DownloadController();
-
     public constructor(context: Listener.Context, options: Listener.Options) {
         super(context, {
             ...options,
@@ -15,9 +12,6 @@ export class MessageCreateListener extends Listener {
     }
 
     public async run(message: Message) {
-        // Prevent bot from triggering itself
-        if (message.author.bot) return;
-
         // 1. Existing Forwarder Logic (Source Bots)
         try {
             await this.container.services.forwarder.processMessage(message);
@@ -27,12 +21,12 @@ export class MessageCreateListener extends Listener {
 
         // 2. Smart Manual Download Logic
         try {
+            // Prevent bot from triggering itself in Manual Mode
+            if (message.author.bot) return;
+
             // Check if Manual Download Mode is enabled
             const manualMode = await container.repos.systemConfig.get('MANUAL_DOWNLOAD_MODE');
             if (manualMode !== 'true') return;
-
-            // Check if URL is valid TikTok URL
-            if (!validateUrl(message.content)) return;
 
             // Check Allowed Channels
             const allowedChannelsStr = await container.repos.systemConfig.get('SMART_DOWNLOAD_CHANNELS');
@@ -40,8 +34,12 @@ export class MessageCreateListener extends Listener {
 
             if (!allowedChannels.includes(message.channelId)) return;
 
+            // Check and Extract URL
+            const url = extractTikTokUrl(message.content);
+            if (!url) return;
+
             // Trigger Download
-            await this.downloadController.handleDownloadRequest(message, message.content);
+            await container.controllers.download.handleDownloadRequest(message, url);
 
         } catch (error) {
             // Silent failure for listener

@@ -246,7 +246,8 @@ export class ConfigController {
           .setCustomId('select_smart_remove')
           .setPlaceholder('➖ Remove Channels from Whitelist')
           .setMinValues(1)
-          .setMaxValues(Math.min(allowedChannels.length, 25)); // Max 25 per interaction
+          // Fix: Ensure maxValues is always at least 1, even if allowedChannels is empty
+          .setMaxValues(Math.max(1, Math.min(allowedChannels.length, 25)));
 
       if (allowedChannels.length > 0) {
           // Limit to 25 options for Discord limits

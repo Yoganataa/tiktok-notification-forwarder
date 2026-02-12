@@ -14,6 +14,7 @@ import { MenuController } from './controllers/menu.controller';
 import { MappingController } from './controllers/admin/mapping.controller';
 import { ConfigController } from './controllers/admin/config.controller';
 import { RoleController } from './controllers/admin/role.controller';
+import { DownloadController } from './controllers/download.controller';
 import { configManager } from './core/config/config';
 
 // 1. Instantiate Core Repositories
@@ -37,6 +38,7 @@ const configManagerReload = async () => {
 const mappingController = new MappingController(userMappingRepo);
 const configController = new ConfigController(systemConfigRepo, configManagerReload);
 const roleController = new RoleController(permissionService);
+const downloadController = new DownloadController();
 
 const menuController = new MenuController(
     permissionService,
@@ -67,7 +69,8 @@ container.controllers = {
     menu: menuController,
     mapping: mappingController,
     config: configController,
-    role: roleController
+    role: roleController,
+    download: downloadController
 };
 
 export const initServices = async () => {

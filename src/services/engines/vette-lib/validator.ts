@@ -18,6 +18,9 @@ const SHORT_URL_PATTERNS = [
   /tiktok\.com\/t\//
 ];
 
+// Regex to find a URL in a larger text blob
+const URL_EXTRACTION_REGEX = /(https?:\/\/[^\s]+)/g;
+
 export function validateUrl(url: string): boolean {
   if (!url || typeof url !== 'string') {
     return false;
@@ -50,4 +53,23 @@ export function parseVideoId(url: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Extracts the first valid TikTok URL from a text string.
+ * Validates candidates against known TikTok patterns.
+ */
+export function extractTikTokUrl(text: string): string | null {
+    if (!text) return null;
+
+    const matches = text.match(URL_EXTRACTION_REGEX);
+    if (!matches) return null;
+
+    for (const candidate of matches) {
+        if (validateUrl(candidate)) {
+            return candidate;
+        }
+    }
+
+    return null;
 }
