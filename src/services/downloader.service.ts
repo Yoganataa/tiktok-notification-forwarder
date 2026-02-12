@@ -64,12 +64,11 @@ export class DownloaderService {
             continue;
         }
 
-        // Configure subtype if applicable (e.g. for Hans engine or Devest engine)
+        // Configure subtype if applicable (e.g. for Hans engine)
         if (engine instanceof HansEngine && subType) {
             (engine as HansEngine).setProvider(subType);
-        } else if (engine instanceof DevestEngine && subType) {
-            (engine as DevestEngine).setMode(subType);
         }
+        // Note: Devest engine is now auto-managed internally, no need to set mode externally.
 
         try {
             logger.info(`Attempting download using engine: ${engineName}${subType ? ` (${subType})` : ''}`);

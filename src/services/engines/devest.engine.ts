@@ -1,10 +1,10 @@
+// src/services/engines/devest.engine.ts
 import { BaseDownloadEngine, DownloadResult } from '../../core/contracts/download.contract';
 import axios, { AxiosInstance } from 'axios';
 import { logger } from '../../shared/utils/logger';
 
 export default class DevestEngine extends BaseDownloadEngine {
     private client: AxiosInstance;
-    private mode: 'hd' | 'non-hd' = 'non-hd';
 
     get name(): string {
         return 'devest';
@@ -14,56 +14,38 @@ export default class DevestEngine extends BaseDownloadEngine {
         super();
         this.client = axios.create({
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Referer': 'https://www.tiktok.com/'
+                'User-Agent': 'com.ss.android.ugc.trill/350103 (Linux; U; Android 13; en_US; Pixel 7; Build/TQ3A.230605.012; Cronet/58.0.2991.0)',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive'
             },
             timeout: 30000,
             maxRedirects: 5
         });
     }
 
-    public setMode(mode: string): void {
-        this.mode = mode === 'hd' ? 'hd' : 'non-hd';
-    }
-
-    async download(url: string): Promise<DownloadResult> {
-        try {
-            if (this.mode === 'hd') {
-                return await this.downloadHD(url);
-            } else {
-                return await this.downloadNonHD(url);
-            }
-        } catch (error) {
-            logger.error(`[DevestEngine] Failed to download (${this.mode}):`, error);
-            throw error;
-        }
+    private async delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     private async getRedirectUrl(url: string): Promise<string> {
         try {
-            // TikTok short URLs (vm.tiktok.com / vt.tiktok.com) need to be resolved
             if (url.includes('vm.tiktok.com') || url.includes('vt.tiktok.com') || url.includes('/t/')) {
-                // Axios handling of manual redirect check usually throws, but if we allow 3xx:
-                // Actually, simpler way in axios is to let it follow redirects and grab responseURL.
-                // But for pure link resolution without downloading body:
-                try {
-                    const finalRes = await this.client.head(url);
-                    return finalRes.request.res.responseUrl || url;
-                } catch (e) {
-                    // Head failed, try GET
-                    const response = await this.client.get(url);
-                    return response.request.res.responseUrl || url;
-                }
+                const response = await this.client.head(url, { maxRedirects: 5 });
+                return response.request.res.responseUrl || url;
             }
             return url;
         } catch (error) {
-            return url;
+            try {
+                const response = await this.client.get(url);
+                return response.request.res.responseUrl || url;
+            } catch {
+                return url;
+            }
         }
     }
 
     private async getMediaId(url: string): Promise<string> {
         const finalUrl = await this.getRedirectUrl(url);
-        // Regex logic from C# GetMediaID
         const videoMatch = finalUrl.match(/\/video\/(\d+)/);
         if (videoMatch) return videoMatch[1];
 
@@ -74,139 +56,178 @@ export default class DevestEngine extends BaseDownloadEngine {
     }
 
     private async downloadBuffer(url: string): Promise<Buffer> {
+        // Size check (HEAD)
+        try {
+            const head = await this.client.head(url);
+            const contentLength = parseInt(head.headers['content-length'] || '0');
+            if (contentLength > 25 * 1024 * 1024) { // 25MB
+                throw new Error('File too large');
+            }
+        } catch (error) {
+            if ((error as Error).message === 'File too large') throw error;
+            // Ignore other errors (e.g. 405 Method Not Allowed) and proceed to stream check
+        }
+
+        // Download with stream to check size dynamically if HEAD failed or wasn't trusted
         const response = await this.client.get(url, { responseType: 'arraybuffer' });
-        return Buffer.from(response.data);
+        const buffer = Buffer.from(response.data);
+
+        if (buffer.length > 25 * 1024 * 1024) {
+            throw new Error('File too large');
+        }
+
+        return buffer;
     }
 
-    // --- NON-HD DOWNLOADER (Standard Quality) ---
-    private async downloadNonHD(url: string): Promise<DownloadResult> {
-        const mediaId = await this.getMediaId(url);
-        logger.debug(`[Devest:Non-HD] Processing ID: ${mediaId}`);
+    private async downloadBuffers(urls: string[]): Promise<Buffer[]> {
+        // Download all images concurrently
+        return Promise.all(urls.map(url => this.downloadBuffer(url)));
+    }
 
-        // Construct API URL exactly like in C# source
-        const apiUrl = `https://api22-normal-c-alisg.tiktokv.com/aweme/v1/feed/?aweme_id=${mediaId}&iid=7238789370386695942&device_id=7238787983025079814&resolution=1080*2400&channel=googleplay&app_name=musical_ly&version_code=350103&device_platform=android&device_type=Pixel+7&os_version=13`;
-
+    async download(url: string): Promise<DownloadResult> {
         try {
-            const dataRes = await this.client.get(apiUrl);
-            const data = dataRes.data;
-
-            // Note: The structure might be nested or direct depending on the API version.
-            // C# source: data.aweme_list?.find
-            const videoObj = data.aweme_list?.find((v: any) => v.aweme_id === mediaId);
-
-            if (!videoObj) throw new Error('Video not found in API response');
-
-            // Try NoWM first, then WM
-            let downloadUrl = videoObj.video?.play_addr?.url_list?.[0];
-            if (!downloadUrl) {
-                downloadUrl = videoObj.video?.download_addr?.url_list?.[0];
+            // Attempt HD first (Auto Mode)
+            logger.info('[DevestEngine] Attempting HD download...');
+            return await this.downloadHD(url);
+        } catch (error) {
+            const msg = (error as Error).message;
+            if (msg === 'File too large' || msg.includes('timeout') || msg.includes('failed')) {
+                logger.warn(`[DevestEngine] HD failed (${msg}), falling back to Non-HD...`);
+                return await this.downloadNonHD(url);
             }
-
-            if (!downloadUrl) throw new Error('Download URL not found in JSON');
-
-            logger.debug(`[Devest:Non-HD] Downloading from ${downloadUrl}...`);
-            const buffer = await this.downloadBuffer(downloadUrl);
-
-            return {
-                type: 'video',
-                buffer: buffer,
-                urls: [downloadUrl]
-            };
-
-        } catch (error: any) {
-            logger.error(`[Devest:Non-HD] Error: ${error.message}`);
             throw error;
         }
     }
 
-    // --- HD DOWNLOADER (High Quality) ---
+    // --- HD DOWNLOADER (High Quality - TikWM) ---
     private async downloadHD(url: string): Promise<DownloadResult> {
-        // Media ID extraction might fail if the URL is not standard, fallback to full URL if needed?
-        // The C# code uses mediaId specifically.
         const mediaId = await this.getMediaId(url);
-        logger.debug(`[Devest:HD] Processing ID: ${mediaId}`);
-
-        // 1. Submit Task
-        const submitEndpoint = "https://www.tikwm.com/api/video/task/submit";
-        const formParams = new URLSearchParams();
-        // API expects 'url' parameter to be the video ID or full URL. Using ID based on source.
-        formParams.append('url', `https://www.tiktok.com/@user/video/${mediaId}`);
-        formParams.append('web', '1');
+        const hdHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        };
 
         try {
-            const submitRes = await this.client.post(submitEndpoint, formParams);
+            // 1. Check Image Post first
+            const checkRes = await this.client.get(`https://www.tikwm.com/api/?url=${mediaId}&hd=1`, { headers: hdHeaders });
+            const checkData = checkRes.data;
+
+            if (checkData.code === 0 && checkData.data?.images) {
+                const images: string[] = checkData.data.images;
+                logger.info(`[Devest:HD] Found slideshow with ${images.length} images.`);
+                const buffers = await this.downloadBuffers(images);
+                return { type: 'image', buffers, urls: images };
+            }
+
+            // 2. Submit Task for Video
+            const submitEndpoint = "https://www.tikwm.com/api/video/task/submit";
+            const formParams = new URLSearchParams();
+            formParams.append('url', mediaId);
+            formParams.append('web', '1');
+
+            const submitRes = await this.client.post(submitEndpoint, formParams, { headers: hdHeaders });
             const submitData = submitRes.data;
 
             if (submitData.code !== 0 || !submitData.data?.task_id) {
-                 // Try fallback with raw URL if ID failed
-                 logger.warn(`[Devest:HD] Task submit failed with ID, retrying with raw URL...`);
-                 const formParamsRetry = new URLSearchParams();
-                 formParamsRetry.append('url', url);
-                 formParamsRetry.append('web', '1');
+                // Try fallback with raw URL if ID failed (per previous logic)
+                const formParamsRetry = new URLSearchParams();
+                formParamsRetry.append('url', url);
+                formParamsRetry.append('web', '1');
+                const retryRes = await this.client.post(submitEndpoint, formParamsRetry, { headers: hdHeaders });
 
-                 const retryRes = await this.client.post(submitEndpoint, formParamsRetry);
-                 if (retryRes.data.code !== 0 || !retryRes.data.data?.task_id) {
-                     throw new Error(`Failed to submit task: ${JSON.stringify(submitData)}`);
-                 }
-                 submitData.data = retryRes.data.data;
+                if (retryRes.data.code !== 0 || !retryRes.data.data?.task_id) {
+                    throw new Error(`Failed to submit HD task: ${JSON.stringify(submitData)}`);
+                }
+                submitData.data = retryRes.data.data;
             }
 
             const taskId = submitData.data.task_id;
-            logger.debug(`[Devest:HD] Task Submitted. Task ID: ${taskId}`);
-
-            // 2. Poll for Result
             let hdVideoUrl = '';
             let attempts = 0;
             const maxRetries = 15;
 
             while (attempts < maxRetries) {
-                await new Promise(r => setTimeout(r, 1000)); // Wait 1 sec
+                await this.delay(1000);
                 attempts++;
 
-                const resultRes = await this.client.get(`https://www.tikwm.com/api/video/task/result?task_id=${taskId}`);
+                const resultRes = await this.client.get(`https://www.tikwm.com/api/video/task/result?task_id=${taskId}`, { headers: hdHeaders });
                 const resultData = resultRes.data;
 
                 if (resultData.code === 0 && resultData.data) {
-                    // Check status property? The source code checks resultData.data.status === 2
-                    // But typically tikwm returns 'data' directly if done?
-                    // Let's stick to source logic:
-                    // Source: if (status === 2 && size > 0)
-
-                    // Note: Type definition for resultData might be loose here
                     const status = resultData.data.status;
                     const size = resultData.data.detail?.size;
 
                     if (status === 2 && size > 0) {
-                        // Source: hdVideoUrl = resultData.data.detail.play_url;
-                        // TikWM usually returns 'play' (No WM) or 'wmplay' (WM)
-                        // 'play_url' in detail object seems correct based on source
-                        hdVideoUrl = resultData.data.detail.play_url || resultData.data.play;
-                        logger.debug(`[Devest:HD] Task Ready! Size: ${size}`);
+                        hdVideoUrl = resultData.data.detail.play_url;
                         break;
                     }
                 }
-                // logger.debug(`[Devest:HD] Waiting for task... (${attempts}/${maxRetries})`);
             }
 
-            if (!hdVideoUrl) throw new Error("HD URL extraction timed out or failed.");
+            if (!hdVideoUrl) throw new Error("HD URL extraction timed out.");
 
-            // Construct full URL if relative
             if (hdVideoUrl.startsWith('/')) {
                 hdVideoUrl = `https://www.tikwm.com${hdVideoUrl}`;
             }
 
-            logger.debug(`[Devest:HD] Downloading HD Video from ${hdVideoUrl}...`);
             const buffer = await this.downloadBuffer(hdVideoUrl);
+            return { type: 'video', buffer, urls: [hdVideoUrl] };
 
-            return {
-                type: 'video',
-                buffer: buffer,
-                urls: [hdVideoUrl]
-            };
-
-        } catch (error: any) {
-            logger.error(`[Devest:HD] Error: ${error.message}`);
+        } catch (error) {
             throw error;
         }
+    }
+
+    // --- NON-HD DOWNLOADER (Standard Quality - Internal API) ---
+    private async downloadNonHD(url: string): Promise<DownloadResult> {
+        const mediaId = await this.getMediaId(url);
+        const apiUrl = `https://api22-normal-c-alisg.tiktokv.com/aweme/v1/feed/?aweme_id=${mediaId}&iid=7238789370386695942&device_id=7238787983025079814&resolution=1080*2400&channel=googleplay&app_name=musical_ly&version_code=350103&device_platform=android&device_type=Pixel+7&os_version=13`;
+
+        let attempts = 0;
+        const maxRetries = 3;
+
+        while (attempts < maxRetries) {
+            try {
+                attempts++;
+                const dataRes = await this.client.get(apiUrl);
+                const data = dataRes.data;
+
+                if (!data.aweme_list || data.aweme_list.length === 0) {
+                    throw new Error('API returned empty aweme_list. Possible region block or invalid ID.');
+                }
+
+                const videoObj = data.aweme_list.find((v: any) => v.aweme_id === mediaId);
+                if (!videoObj) throw new Error('Video ID mismatch in API response.');
+
+                // Check for Slideshow
+                if (videoObj.image_post_info && videoObj.image_post_info.images) {
+                    const images = videoObj.image_post_info.images;
+                    const imageUrls: string[] = [];
+
+                    for (const img of images) {
+                        const imgUrl = img.display_image.url_list[0];
+                        if (imgUrl) imageUrls.push(imgUrl);
+                    }
+
+                    const buffers = await this.downloadBuffers(imageUrls);
+                    return { type: 'image', buffers, urls: imageUrls };
+                }
+
+                // Video Download
+                const downloadUrl = videoObj.video?.play_addr?.url_list?.[0] || videoObj.video?.download_addr?.url_list?.[0];
+                if (!downloadUrl) throw new Error('Download URL not found in JSON.');
+
+                const buffer = await this.downloadBuffer(downloadUrl);
+                return { type: 'video', buffer, urls: [downloadUrl] };
+
+            } catch (error: any) {
+                if (error.response && error.response.status === 429) {
+                    await this.delay(5000);
+                    continue;
+                }
+                if (attempts >= maxRetries) throw error;
+            }
+        }
+        throw new Error("Download failed after max retries.");
     }
 }

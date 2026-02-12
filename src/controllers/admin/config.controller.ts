@@ -88,12 +88,79 @@ export class ConfigController {
 
         // Add specific Devest subtypes if 'devest' is available
         if (availableEngines.includes('devest')) {
+            // Simplified option as per recent decisions
             const devestTypes = [
-                { val: 'devest:non-hd', label: 'Devest (Non-HD)' },
-                { val: 'devest:hd', label: 'Devest (HD)' }
+                { val: 'devest', label: 'Devest (Auto-HD)' }
             ];
 
             devestTypes.forEach(t => {
+                 // Check against engine name directly since value is 'devest'
+                 if (!excludeValues.includes(t.val)) {
+                    // Only add if not already added by the main loop (main loop adds base names)
+                    // But main loop adds 'devest' with label 'devest'. We want a better label.
+                    // Actually, the main loop adds 'devest' as an option.
+                    // We should probably filter 'devest' out of the main loop or just let this override/add specific labeled ones.
+                    // Since 'devest' is in availableEngines, the main loop adds it.
+                    // Let's rely on the main loop for the base value 'devest', but maybe we want to customize the label?
+                    // The main loop does: .setLabel(engine).setValue(engine).
+                    // So we get "devest".
+                    // The requirement said: Add/Update the option to simply be `Devest (Auto)`.
+                    // The simplest way is to NOT treat it as a subtype here, but let the main loop handle it, OR customize it here.
+                    // Since the main loop has already run, we have a duplicate "devest" option if we add it here.
+                    // BETTER APPROACH: Customize the label in the main loop or filter it out there.
+                 }
+            });
+        }
+
+        return options;
+    };
+
+    // REDEFINED buildOptions to handle custom labels properly
+    const buildOptionsRefined = (selectedValue: string, excludeValues: string[], includeNone: boolean) => {
+        const options: StringSelectMenuOptionBuilder[] = [];
+
+        if (includeNone) {
+            options.push(new StringSelectMenuOptionBuilder()
+                .setLabel('None')
+                .setValue('none')
+                .setDescription('Disable this fallback slot')
+                .setDefault(selectedValue === 'none'));
+        }
+
+        availableEngines.forEach(engine => {
+            if (!excludeValues.includes(engine)) {
+                let label = engine;
+                let description = '';
+
+                // Custom labels
+                if (engine === 'devest') {
+                    label = 'Devest (Auto-HD)';
+                    description = 'Smart HD with fallback';
+                } else if (engine === 'vette') {
+                    label = 'Vette Downloader';
+                    description = 'Recommended Default';
+                }
+
+                options.push(new StringSelectMenuOptionBuilder()
+                    .setLabel(label)
+                    .setValue(engine)
+                    .setDescription(description)
+                    .setDefault(selectedValue === engine));
+            }
+        });
+
+        // Add specific Hans subtypes if 'hans' is available
+        if (availableEngines.includes('hans')) {
+            const hansTypes = [
+                { val: 'hans:native', label: 'Hans (Native)' },
+                { val: 'hans:snaptik', label: 'Hans (Snaptik)' },
+                { val: 'hans:tikmate', label: 'Hans (Tikmate)' },
+                { val: 'hans:musicalydown', label: 'Hans (MusicalDown)' },
+                { val: 'hans:ttdownloader', label: 'Hans (TTDownloader)' },
+                { val: 'hans:fasttoksave', label: 'Hans (FastTok)' }
+            ];
+
+            hansTypes.forEach(t => {
                  if (!excludeValues.includes(t.val)) {
                     options.push(new StringSelectMenuOptionBuilder()
                         .setLabel(t.label)
@@ -110,19 +177,19 @@ export class ConfigController {
     const primarySelect = new StringSelectMenuBuilder()
         .setCustomId('select_engine_primary')
         .setPlaceholder('Select Primary Engine')
-        .addOptions(buildOptions(primaryEngine, [fallback1, fallback2].filter(v => v !== 'none'), false));
+        .addOptions(buildOptionsRefined(primaryEngine, [fallback1, fallback2].filter(v => v !== 'none'), false));
 
     // 2. Fallback 1 Select (Excludes Primary & Fallback 2)
     const fallback1Select = new StringSelectMenuBuilder()
         .setCustomId('select_engine_fallback_1')
         .setPlaceholder('Select Fallback Engine 1')
-        .addOptions(buildOptions(fallback1, [primaryEngine, fallback2].filter(v => v !== 'none'), true));
+        .addOptions(buildOptionsRefined(fallback1, [primaryEngine, fallback2].filter(v => v !== 'none'), true));
 
     // 3. Fallback 2 Select (Excludes Primary & Fallback 1)
     const fallback2Select = new StringSelectMenuBuilder()
         .setCustomId('select_engine_fallback_2')
         .setPlaceholder('Select Fallback Engine 2')
-        .addOptions(buildOptions(fallback2, [primaryEngine, fallback1].filter(v => v !== 'none'), true));
+        .addOptions(buildOptionsRefined(fallback2, [primaryEngine, fallback1].filter(v => v !== 'none'), true));
 
 
     const rowPrimary = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(primarySelect);
