@@ -233,6 +233,8 @@ export class ConfigController {
               { name: 'Allowed Channels', value: channelMentions, inline: false }
           );
 
+      const components: any[] = [];
+
       // Row 1: Add Channels (Channel Select)
       const addSelect = new ChannelSelectMenuBuilder()
           .setCustomId('select_smart_add')
@@ -241,28 +243,26 @@ export class ConfigController {
           .setMinValues(1)
           .setMaxValues(5); // Allow adding up to 5 at once
 
-      // Row 2: Remove Channels (String Select)
-      const removeSelect = new StringSelectMenuBuilder()
-          .setCustomId('select_smart_remove')
-          .setPlaceholder('➖ Remove Channels from Whitelist')
-          .setMinValues(1)
-          // Fix: Ensure maxValues is always at least 1, even if allowedChannels is empty
-          .setMaxValues(Math.max(1, Math.min(allowedChannels.length, 25)));
+      components.push(new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(addSelect));
 
+      // Row 2: Remove Channels (String Select) - Only if channels exist
       if (allowedChannels.length > 0) {
+          const removeSelect = new StringSelectMenuBuilder()
+              .setCustomId('select_smart_remove')
+              .setPlaceholder('➖ Remove Channels from Whitelist')
+              .setMinValues(1)
+              .setMaxValues(Math.min(allowedChannels.length, 25)); // Max 25 per interaction
+
           // Limit to 25 options for Discord limits
           const options = allowedChannels.slice(0, 25).map(id => {
-              // We can't easily get channel names here without fetching, so use ID as label or try to resolve
-              // Ideally we use cache. For now using ID is safe.
               const channel = interaction.guild?.channels.cache.get(id);
               return new StringSelectMenuOptionBuilder()
                   .setLabel(channel ? `#${channel.name}` : `Channel ID: ${id}`)
                   .setValue(id);
           });
           removeSelect.addOptions(options);
-      } else {
-          removeSelect.addOptions(new StringSelectMenuOptionBuilder().setLabel('No channels to remove').setValue('none'));
-          removeSelect.setDisabled(true);
+
+          components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect));
       }
 
       // Row 3: Controls
@@ -278,11 +278,7 @@ export class ConfigController {
               .setEmoji('⬅️')
       );
 
-      const components = [
-          new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(addSelect),
-          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect),
-          rowControls
-      ];
+      components.push(rowControls);
 
       const payload = { embeds: [embed], components: components };
 

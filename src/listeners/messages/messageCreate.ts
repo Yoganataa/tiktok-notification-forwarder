@@ -21,20 +21,19 @@ export class MessageCreateListener extends Listener {
 
         // 2. Smart Manual Download Logic
         try {
-            // Prevent bot from triggering itself in Manual Mode
+            // Priority Check 1: Bot Author (Fastest)
             if (message.author.bot) return;
 
-            // Check if Manual Download Mode is enabled
+            // Priority Check 2: Manual Mode Config (DB Lookup)
             const manualMode = await container.repos.systemConfig.get('MANUAL_DOWNLOAD_MODE');
             if (manualMode !== 'true') return;
 
-            // Check Allowed Channels
+            // Priority Check 3: Channel Whitelist (String check)
             const allowedChannelsStr = await container.repos.systemConfig.get('SMART_DOWNLOAD_CHANNELS');
             const allowedChannels = allowedChannelsStr ? allowedChannelsStr.split(',') : [];
-
             if (!allowedChannels.includes(message.channelId)) return;
 
-            // Check and Extract URL
+            // Priority Check 4: URL Regex (Most Expensive)
             const url = extractTikTokUrl(message.content);
             if (!url) return;
 
