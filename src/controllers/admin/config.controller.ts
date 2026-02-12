@@ -88,26 +88,13 @@ export class ConfigController {
 
         // Add specific Devest subtypes if 'devest' is available
         if (availableEngines.includes('devest')) {
-            // Simplified option as per recent decisions
             const devestTypes = [
                 { val: 'devest', label: 'Devest (Auto-HD)' }
             ];
 
             devestTypes.forEach(t => {
-                 // Check against engine name directly since value is 'devest'
                  if (!excludeValues.includes(t.val)) {
-                    // Only add if not already added by the main loop (main loop adds base names)
-                    // But main loop adds 'devest' with label 'devest'. We want a better label.
-                    // Actually, the main loop adds 'devest' as an option.
-                    // We should probably filter 'devest' out of the main loop or just let this override/add specific labeled ones.
-                    // Since 'devest' is in availableEngines, the main loop adds it.
-                    // Let's rely on the main loop for the base value 'devest', but maybe we want to customize the label?
-                    // The main loop does: .setLabel(engine).setValue(engine).
-                    // So we get "devest".
-                    // The requirement said: Add/Update the option to simply be `Devest (Auto)`.
-                    // The simplest way is to NOT treat it as a subtype here, but let the main loop handle it, OR customize it here.
-                    // Since the main loop has already run, we have a duplicate "devest" option if we add it here.
-                    // BETTER APPROACH: Customize the label in the main loop or filter it out there.
+                    // Logic handled in buildOptionsRefined
                  }
             });
         }
@@ -141,11 +128,16 @@ export class ConfigController {
                     description = 'Recommended Default';
                 }
 
-                options.push(new StringSelectMenuOptionBuilder()
+                const option = new StringSelectMenuOptionBuilder()
                     .setLabel(label)
                     .setValue(engine)
-                    .setDescription(description)
-                    .setDefault(selectedValue === engine));
+                    .setDefault(selectedValue === engine);
+
+                if (description.length > 0) {
+                    option.setDescription(description);
+                }
+
+                options.push(option);
             }
         });
 
