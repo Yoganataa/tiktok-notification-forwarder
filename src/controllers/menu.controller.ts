@@ -89,6 +89,16 @@ export class MenuController {
         await this.configController.showEnvironmentPage(interaction);
         return;
     }
+    if (id === 'btn_conf_smart') {
+        await interaction.deferUpdate();
+        await this.configController.showSmartDownloadPage(interaction);
+        return;
+    }
+    if (id === 'btn_toggle_manual') {
+        await interaction.deferUpdate();
+        await this.configController.handleToggleManualMode(interaction);
+        return;
+    }
     if (id === 'btn_edit_env') {
         // Do NOT deferUpdate here because showModal must be the first response
         await this.configController.showEditModal(interaction);
@@ -172,6 +182,17 @@ export class MenuController {
         await this.configController.handleEngineSelect(interaction as StringSelectMenuInteraction);
         return;
     }
+    if (id === 'select_smart_add') {
+        await interaction.deferUpdate();
+        await this.configController.handleAddSmartChannels(interaction as ChannelSelectMenuInteraction);
+        return;
+    }
+    if (id === 'select_smart_remove') {
+        await interaction.deferUpdate();
+        await this.configController.handleRemoveSmartChannels(interaction as StringSelectMenuInteraction);
+        return;
+    }
+
     if (interaction.customId === 'select_staff_manage') {
         await interaction.deferUpdate();
         await this.roleController.handleSelectMenu(interaction as StringSelectMenuInteraction);

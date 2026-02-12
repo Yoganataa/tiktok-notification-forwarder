@@ -11,7 +11,10 @@ import {
   RepliableInteraction,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  StringSelectMenuOptionBuilder
+  StringSelectMenuOptionBuilder,
+  ChannelSelectMenuBuilder,
+  ChannelType,
+  ChannelSelectMenuInteraction
 } from 'discord.js';
 import { SystemConfigRepository } from '../../repositories/system-config.repository';
 import { configManager } from '../../core/config/config';
@@ -43,64 +46,6 @@ export class ConfigController {
 
     // Get all available engines dynamically
     const availableEngines = container.services.downloader.getRegisteredEngineNames();
-
-    // Helper to build options
-    const buildOptions = (selectedValue: string, excludeValues: string[], includeNone: boolean) => {
-        const options: StringSelectMenuOptionBuilder[] = [];
-
-        if (includeNone) {
-            options.push(new StringSelectMenuOptionBuilder()
-                .setLabel('None')
-                .setValue('none')
-                .setDescription('Disable this fallback slot')
-                .setDefault(selectedValue === 'none'));
-        }
-
-        availableEngines.forEach(engine => {
-            if (!excludeValues.includes(engine)) {
-                options.push(new StringSelectMenuOptionBuilder()
-                    .setLabel(engine)
-                    .setValue(engine)
-                    .setDefault(selectedValue === engine));
-            }
-        });
-
-        // Add specific Hans subtypes if 'hans' is available
-        if (availableEngines.includes('hans')) {
-            const hansTypes = [
-                { val: 'hans:native', label: 'Hans (Native)' },
-                { val: 'hans:snaptik', label: 'Hans (Snaptik)' },
-                { val: 'hans:tikmate', label: 'Hans (Tikmate)' },
-                { val: 'hans:musicalydown', label: 'Hans (MusicalDown)' },
-                { val: 'hans:ttdownloader', label: 'Hans (TTDownloader)' },
-                { val: 'hans:fasttoksave', label: 'Hans (FastTok)' }
-            ];
-
-            hansTypes.forEach(t => {
-                 if (!excludeValues.includes(t.val)) {
-                    options.push(new StringSelectMenuOptionBuilder()
-                        .setLabel(t.label)
-                        .setValue(t.val)
-                        .setDefault(selectedValue === t.val));
-                 }
-            });
-        }
-
-        // Add specific Devest subtypes if 'devest' is available
-        if (availableEngines.includes('devest')) {
-            const devestTypes = [
-                { val: 'devest', label: 'Devest (Auto-HD)' }
-            ];
-
-            devestTypes.forEach(t => {
-                 if (!excludeValues.includes(t.val)) {
-                    // Logic handled in buildOptionsRefined
-                 }
-            });
-        }
-
-        return options;
-    };
 
     // REDEFINED buildOptions to handle custom labels properly
     const buildOptionsRefined = (selectedValue: string, excludeValues: string[], includeNone: boolean) => {
@@ -191,6 +136,7 @@ export class ConfigController {
     const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('btn_edit_env').setLabel('Edit Env').setStyle(ButtonStyle.Primary).setEmoji('📝'),
       new ButtonBuilder().setCustomId('btn_toggle_autodl').setLabel(autoDl ? 'Disable Auto DL' : 'Enable Auto DL').setStyle(autoDl ? ButtonStyle.Danger : ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('btn_conf_smart').setLabel('Smart DL Config').setStyle(ButtonStyle.Secondary).setEmoji('🧠'),
       new ButtonBuilder().setCustomId('nav_back_main').setLabel('Back to Menu').setStyle(ButtonStyle.Secondary).setEmoji('⬅️')
     );
 
@@ -264,5 +210,118 @@ export class ConfigController {
 
       await showMainMenuCallback(interaction);
       await interaction.followUp({ content: '✅ Configuration saved & **Hot Reloaded** successfully!', ephemeral: true });
+  }
+
+  // --- Smart Download Configuration ---
+
+  async showSmartDownloadPage(interaction: ButtonInteraction | RepliableInteraction | StringSelectMenuInteraction | ChannelSelectMenuInteraction): Promise<void> {
+      const manualMode = await this.systemConfigRepo.get('MANUAL_DOWNLOAD_MODE');
+      const isManualMode = manualMode === 'true';
+      const allowedChannelsStr = await this.systemConfigRepo.get('SMART_DOWNLOAD_CHANNELS');
+      const allowedChannels = allowedChannelsStr ? allowedChannelsStr.split(',') : [];
+
+      const channelMentions = allowedChannels.length > 0
+          ? allowedChannels.map(id => `<#${id}>`).join(', ')
+          : 'None';
+
+      const embed = new EmbedBuilder()
+          .setTitle('🧠 Smart Manual Download Configuration')
+          .setColor(0x3498db)
+          .setDescription('Configure which channels allow direct TikTok link downloads.')
+          .addFields(
+              { name: 'Status', value: isManualMode ? '✅ **Active**' : '🔴 **Inactive**', inline: true },
+              { name: 'Allowed Channels', value: channelMentions, inline: false }
+          );
+
+      // Row 1: Add Channels (Channel Select)
+      const addSelect = new ChannelSelectMenuBuilder()
+          .setCustomId('select_smart_add')
+          .setPlaceholder('➕ Add Channels to Whitelist')
+          .setChannelTypes(ChannelType.GuildText)
+          .setMinValues(1)
+          .setMaxValues(5); // Allow adding up to 5 at once
+
+      // Row 2: Remove Channels (String Select)
+      const removeSelect = new StringSelectMenuBuilder()
+          .setCustomId('select_smart_remove')
+          .setPlaceholder('➖ Remove Channels from Whitelist')
+          .setMinValues(1)
+          .setMaxValues(Math.min(allowedChannels.length, 25)); // Max 25 per interaction
+
+      if (allowedChannels.length > 0) {
+          // Limit to 25 options for Discord limits
+          const options = allowedChannels.slice(0, 25).map(id => {
+              // We can't easily get channel names here without fetching, so use ID as label or try to resolve
+              // Ideally we use cache. For now using ID is safe.
+              const channel = interaction.guild?.channels.cache.get(id);
+              return new StringSelectMenuOptionBuilder()
+                  .setLabel(channel ? `#${channel.name}` : `Channel ID: ${id}`)
+                  .setValue(id);
+          });
+          removeSelect.addOptions(options);
+      } else {
+          removeSelect.addOptions(new StringSelectMenuOptionBuilder().setLabel('No channels to remove').setValue('none'));
+          removeSelect.setDisabled(true);
+      }
+
+      // Row 3: Controls
+      const rowControls = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+              .setCustomId('btn_toggle_manual')
+              .setLabel(isManualMode ? 'Disable Smart Mode' : 'Enable Smart Mode')
+              .setStyle(isManualMode ? ButtonStyle.Danger : ButtonStyle.Success),
+          new ButtonBuilder()
+              .setCustomId('nav_env') // Go back to main Env page
+              .setLabel('Back')
+              .setStyle(ButtonStyle.Secondary)
+              .setEmoji('⬅️')
+      );
+
+      const components = [
+          new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(addSelect),
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect),
+          rowControls
+      ];
+
+      const payload = { embeds: [embed], components: components };
+
+      if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+          if (!interaction.deferred && !interaction.replied) await (interaction as any).update(payload);
+          else await interaction.editReply(payload);
+      } else {
+          await (interaction as RepliableInteraction).reply({ ...payload, ephemeral: true });
+      }
+  }
+
+  async handleToggleManualMode(interaction: ButtonInteraction): Promise<void> {
+      const current = await this.systemConfigRepo.get('MANUAL_DOWNLOAD_MODE');
+      const newState = current === 'true' ? 'false' : 'true';
+      await this.systemConfigRepo.set('MANUAL_DOWNLOAD_MODE', newState);
+      await this.onConfigReload();
+      await this.showSmartDownloadPage(interaction);
+  }
+
+  async handleAddSmartChannels(interaction: ChannelSelectMenuInteraction): Promise<void> {
+      const selectedIds = interaction.values; // Array of IDs
+      const currentStr = await this.systemConfigRepo.get('SMART_DOWNLOAD_CHANNELS');
+      const currentIds = currentStr ? currentStr.split(',') : [];
+
+      // Merge and unique
+      const newIds = Array.from(new Set([...currentIds, ...selectedIds])).filter(Boolean);
+
+      await this.systemConfigRepo.set('SMART_DOWNLOAD_CHANNELS', newIds.join(','));
+      await this.showSmartDownloadPage(interaction);
+  }
+
+  async handleRemoveSmartChannels(interaction: StringSelectMenuInteraction): Promise<void> {
+      const selectedIds = interaction.values;
+      const currentStr = await this.systemConfigRepo.get('SMART_DOWNLOAD_CHANNELS');
+      let currentIds = currentStr ? currentStr.split(',') : [];
+
+      // Filter out removed IDs
+      currentIds = currentIds.filter(id => !selectedIds.includes(id));
+
+      await this.systemConfigRepo.set('SMART_DOWNLOAD_CHANNELS', currentIds.join(','));
+      await this.showSmartDownloadPage(interaction);
   }
 }
