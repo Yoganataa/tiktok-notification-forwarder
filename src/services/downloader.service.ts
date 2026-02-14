@@ -1,7 +1,6 @@
 import { BaseDownloadEngine, DownloadResult } from '../core/contracts/download.contract';
 import { SystemConfigRepository } from '../repositories/system-config.repository';
 import { logger } from '../shared/utils/logger';
-import VetteEngine from './engines/vette.engine';
 import YtDlpEngine from './engines/ytdlp.engine';
 import DevestEngine from './engines/devest.engine';
 
@@ -13,7 +12,6 @@ export class DownloaderService {
   async init() {
      if (this.engines.size > 0) return;
 
-     this.registerEngine(new VetteEngine());
      this.registerEngine(new YtDlpEngine());
      this.registerEngine(new DevestEngine());
 
@@ -33,7 +31,8 @@ export class DownloaderService {
 
   async download(url: string): Promise<DownloadResult> {
     // 1. Load configuration for Primary, Fallback 1, and Fallback 2
-    const primaryEngineName = await this.configRepo.get('DOWNLOAD_ENGINE') || 'vette';
+    // Set default to 'devest' as 'vette' is removed
+    const primaryEngineName = await this.configRepo.get('DOWNLOAD_ENGINE') || 'devest';
     const fallback1 = await this.configRepo.get('DOWNLOAD_ENGINE_FALLBACK_1') || 'none';
     const fallback2 = await this.configRepo.get('DOWNLOAD_ENGINE_FALLBACK_2') || 'none';
 
@@ -59,8 +58,6 @@ export class DownloaderService {
             logger.warn(`Engine ${engineName} not found, skipping...`);
             continue;
         }
-
-        // Note: Devest engine is now auto-managed internally, no need to set mode externally.
 
         try {
             logger.info(`Attempting download using engine: ${engineName}${subType ? ` (${subType})` : ''}`);

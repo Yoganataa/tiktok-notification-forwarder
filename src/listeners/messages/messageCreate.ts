@@ -1,7 +1,7 @@
 import { Listener } from '@sapphire/framework';
 import { Message } from 'discord.js';
 import { container } from '@sapphire/framework';
-import { validateUrl, extractTikTokUrl } from '../../services/engines/vette-lib/validator';
+import { extractTikTokUrl } from '../../shared/utils/tiktok-validator';
 
 export class MessageCreateListener extends Listener {
     public constructor(context: Listener.Context, options: Listener.Options) {
