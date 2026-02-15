@@ -13,7 +13,7 @@ A robust, enterprise-grade Discord bot designed to forward TikTok notifications 
 
 -   **Intelligent Forwarding**: Detects TikTok links from specific source bots and forwards them to mapped channels.
 -   **Multi-Engine Downloader**: Automatically downloads TikTok videos and photo slides to prevent link rot and embed issues.
-    -   Supported Engines: **Vette** (Default), **Hans**, **Btch**, **YtDlp**.
+    -   Supported Engines: **Devest** (Default), **YtDlp**.
 -   **Smart Auto-Provisioning**:
     -   If a user is not mapped, the bot automatically creates a new channel (sanitized username) under a configured category.
     -   Updates the database mapping immediately.
@@ -87,7 +87,7 @@ src/
     DATABASE_URL=./database.sqlite
 
     # TikTok Downloader
-    DOWNLOAD_ENGINE=vette  # vette, hans, btch, or ytdlp
+    DOWNLOAD_ENGINE=devest  # devest, or ytdlp
     AUTO_DOWNLOAD=true
     ```
 
@@ -115,9 +115,6 @@ src/
 
 This project stands on the shoulders of giants. We utilize code and logic from the following open-source projects for our media downloading capabilities:
 
-*   **[tiktok-downloader](https://github.com/Vette1123/tiktok-downloader)** by Vette1123 (Integrated as `vette` engine).
-*   **[tiktok-dl](https://github.com/hansputera/tiktok-dl)** by Hansputera (Integrated as `hans` engine).
-*   **[btch-downloader](https://github.com/hostinger-bot/btch-downloader)** by BochilTeam.
 *   **[youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec)**.
 
 See [LICENSE](LICENSE) for full third-party license details.
