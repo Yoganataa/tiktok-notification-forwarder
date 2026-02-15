@@ -29,7 +29,7 @@ export class ConfigController {
 
   async showEnvironmentPage(interaction: ButtonInteraction | RepliableInteraction | StringSelectMenuInteraction): Promise<void> {
     const config = configManager.get();
-    const primaryEngine = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'vette';
+    const primaryEngine = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'devest';
     const fallback1 = await this.systemConfigRepo.get('DOWNLOAD_ENGINE_FALLBACK_1') || 'none';
     const fallback2 = await this.systemConfigRepo.get('DOWNLOAD_ENGINE_FALLBACK_2') || 'none';
     const autoDl = (await this.systemConfigRepo.get('AUTO_DOWNLOAD')) !== 'false';
@@ -69,9 +69,6 @@ export class ConfigController {
                 if (engine === 'devest') {
                     label = 'Devest (Auto-HD)';
                     description = 'Smart HD with fallback';
-                } else if (engine === 'vette') {
-                    label = 'Vette Downloader';
-                    description = 'Recommended Default';
                 }
 
                 const option = new StringSelectMenuOptionBuilder()
