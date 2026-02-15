@@ -1,14 +1,13 @@
-// src/services/engines/devest.engine.ts
 import { BaseDownloadEngine, DownloadResult } from '../../core/contracts/download.contract';
 import axios, { AxiosInstance } from 'axios';
 import { logger } from '../../shared/utils/logger';
 import { parseVideoId, TIKTOK_PATTERNS } from '../../shared/utils/tiktok-validator';
 
-export default class DevestEngine extends BaseDownloadEngine {
+export default class DevestAlphaEngine extends BaseDownloadEngine {
     private client: AxiosInstance;
 
     get name(): string {
-        return 'devest';
+        return 'devest-alpha';
     }
 
     constructor() {
