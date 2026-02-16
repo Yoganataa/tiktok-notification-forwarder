@@ -1,7 +1,7 @@
 import { Listener } from '@sapphire/framework';
 import { Message } from 'discord.js';
 import { container } from '@sapphire/framework';
-import { extractTikTokUrl } from '../../shared/utils/tiktok-validator';
+import { extractUrl } from '../../shared/utils/url-matcher';
 
 export class MessageCreateListener extends Listener {
     public constructor(context: Listener.Context, options: Listener.Options) {
@@ -34,7 +34,8 @@ export class MessageCreateListener extends Listener {
             if (!allowedChannels.includes(message.channelId)) return;
 
             // Priority Check 4: URL Regex (Most Expensive)
-            const url = extractTikTokUrl(message.content);
+            // Use the new generic URL extractor instead of TikTok specific one
+            const url = extractUrl(message.content);
             if (!url) return;
 
             // Trigger Download
