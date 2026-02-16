@@ -4,11 +4,28 @@ import { logger } from '../shared/utils/logger';
 import { detectPlatform } from '../shared/utils/url-matcher';
 
 // Engines
-import YtDlpEngine from './engines/ytdlp.engine';
-import DevestAlphaEngine from './engines/devest-alpha.engine';
-import DevestBetaEngine from './engines/devest-beta.engine';
-import TwitterEngine from './engines/twitter.engine';
-import RedditEngine from './engines/reddit.engine';
+import {
+    BlueskyEngine,
+    CapCutEngine,
+    DailymotionEngine,
+    DevestAlphaEngine,
+    DevestBetaEngine,
+    DouyinEngine,
+    FacebookInstaEngine,
+    KuaishouEngine,
+    LinkedInEngine,
+    PinterestEngine,
+    RedditEngine,
+    SnapchatEngine,
+    SoundCloudEngine,
+    SpotifyEngine,
+    TeraboxEngine,
+    ThreadsEngine,
+    TumblrEngine,
+    TwitterEngine,
+    YtDlpEngine,
+    YouTubeEngine // Source A YouTube Engine
+} from './engines';
 
 export class DownloaderService {
   private engines: Map<string, BaseDownloadEngine> = new Map();
@@ -24,8 +41,23 @@ export class DownloaderService {
      this.registerEngine(new YtDlpEngine());       // 'ytdlp'
 
      // Other Platforms
-     this.registerEngine(new TwitterEngine());
+     this.registerEngine(new BlueskyEngine());
+     this.registerEngine(new CapCutEngine());
+     this.registerEngine(new DailymotionEngine());
+     this.registerEngine(new DouyinEngine());
+     this.registerEngine(new FacebookInstaEngine());
+     this.registerEngine(new KuaishouEngine());
+     this.registerEngine(new LinkedInEngine());
+     this.registerEngine(new PinterestEngine());
      this.registerEngine(new RedditEngine());
+     this.registerEngine(new SnapchatEngine());
+     this.registerEngine(new SoundCloudEngine());
+     this.registerEngine(new SpotifyEngine());
+     this.registerEngine(new TeraboxEngine());
+     this.registerEngine(new ThreadsEngine());
+     this.registerEngine(new TumblrEngine());
+     this.registerEngine(new TwitterEngine());
+     this.registerEngine(new YouTubeEngine()); // 'youtube'
 
      logger.info(`[DownloaderService] Initialized with ${this.engines.size} engines.`);
   }
@@ -46,19 +78,27 @@ export class DownloaderService {
     logger.info(`[DownloaderService] Detected platform: ${platform || 'Unknown'}`);
 
     // --- NON-TIKTOK ROUTING ---
-    if (platform && platform !== 'tiktok' && platform !== 'douyin') {
-        const engine = this.engines.get(platform);
+    if (platform && platform !== 'tiktok') {
+        // Special case for Douyin: it has its own engine but can also be handled by Devest/TikTok logic potentially.
+        // Source A has dedicated Douyin controller/service.
+        // If regex returns 'douyin', we use 'douyin' engine.
+
+        let engineName = platform;
+
+        // Map detected platform to engine name if necessary (usually 1:1)
+        // Check if engine exists
+        let engine = this.engines.get(engineName);
+
+        // Fallback for 'instagram'/'facebook' regex to 'facebook-insta' engine
+        if (!engine && (platform === 'instagram' || platform === 'facebook')) {
+             engine = this.engines.get('facebook-insta');
+        }
+
         if (engine) {
-            logger.info(`[DownloaderService] Routing to dedicated engine: ${platform}`);
+            logger.info(`[DownloaderService] Routing to dedicated engine: ${engine.name}`);
             return await engine.download(url);
         } else {
              // If platform detected but no engine, maybe fallback to generic ytdlp if registered?
-             // For now, per instruction: "This engine does not need to appear in the /menu configuration."
-             // If we don't have a specific class (like instagram), we might want to try ytdlp as a catch-all if configured?
-             // But instruction says: "If the URL matches another platform... directly use the appropriate engine."
-             // If no engine found, fall through to error or generic handling.
-
-             // Check if YtDlp supports it generically?
              const ytdlp = this.engines.get('ytdlp');
              if (ytdlp) {
                  logger.info(`[DownloaderService] No dedicated engine for ${platform}, trying generic yt-dlp.`);
@@ -71,9 +111,6 @@ export class DownloaderService {
 
     // --- TIKTOK ROUTING (Primary -> Fallback 1 -> Fallback 2) ---
     // 1. Load configuration
-    // Default to 'devest-alpha' (renamed from devest) if not set.
-    // Note: Database might still have 'devest' or 'vette' if not migrated.
-    // We should map 'devest' -> 'devest-alpha' for backward compatibility in config.
     let primaryEngineName = await this.configRepo.get('DOWNLOAD_ENGINE') || 'devest-alpha';
     let fallback1 = await this.configRepo.get('DOWNLOAD_ENGINE_FALLBACK_1') || 'none';
     let fallback2 = await this.configRepo.get('DOWNLOAD_ENGINE_FALLBACK_2') || 'none';
