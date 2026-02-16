@@ -35,6 +35,10 @@ export interface AppConfig {
     nodeEnv: 'development' | 'production' | 'test';
     logLevel: string;
   };
+  update: {
+    upstreamRepo: string;
+    upstreamBranch: string;
+  };
 }
 
 class ConfigManager {
@@ -80,6 +84,10 @@ class ConfigManager {
       app: {
         nodeEnv: (process.env.NODE_ENV as any) || 'development',
         logLevel: process.env.LOG_LEVEL || 'info',
+      },
+      update: {
+        upstreamRepo: process.env.UPSTREAM_REPO || 'https://github.com/Yoganataa/tiktok-notification-forwarder/',
+        upstreamBranch: process.env.UPSTREAM_BRANCH || 'main',
       },
     };
 

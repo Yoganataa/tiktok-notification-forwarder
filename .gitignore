@@ -46,3 +46,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Binaries
+yt-dlp
+yt-dlp.exe
