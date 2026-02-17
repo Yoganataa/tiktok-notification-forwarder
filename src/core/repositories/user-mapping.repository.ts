@@ -49,7 +49,7 @@ export class UserMappingRepository extends BaseRepository {
 
   async updateTelegramTopic(
     username: string,
-    topicId: number,
+    topicId: string | number, // Changed to allow string
     client?: PoolClient
   ): Promise<void> {
     const cleanUsername = username.toLowerCase().trim();

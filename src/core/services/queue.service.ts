@@ -149,6 +149,7 @@ export class QueueService {
 
   private async processTelegram(username: string, url: string, media: any): Promise<void> {
       try {
+          // getOrCreateTopic returns string | null now
           const topicId = await this.telegramService.getOrCreateTopic(username);
           if (!topicId) {
               logger.warn(`Skipping Telegram for ${username}: Could not get topic.`);
@@ -159,19 +160,7 @@ export class QueueService {
              if (media.type === 'video' && media.buffer) {
                  await this.telegramService.sendVideo(topicId, media.buffer, url);
              } else if (media.type === 'image') {
-                 // Handle images (slideshows or single)
-                 // TelegramService currently only has sendVideo. I should probably add sendImage or use generic sendFile if flexible.
-                 // For now, let's use sendVideo (which calls sendFile) if it's a buffer, but caption might be misleading if it's an image.
-                 // The user code provided sendVideo. I'll stick to it or just send link if image to avoid complexity if method missing.
-                 // Wait, I can try to use sendVideo for generic file if the implementation allows, but the name implies video.
-                 // Let's check TelegramService implementation again. It uses client.sendFile.
-                 // So I can use it for images too if I change the logic slightly or just call it.
-                 // But better to be safe and just send link for images if not strictly supported or implemented.
-                 // Or I can add `sendMessage` to TelegramService.
-
-                 // If I look at my implementation of TelegramService, I added `sendMessage` too.
-                 // But I didn't add `sendPhoto`.
-                 // I'll send the link for images for now to be safe, or just use sendMessage.
+                 // Send message link for photo
                  await this.telegramService.sendMessage(topicId, `📸 New Photo: ${url}`);
              }
           } else {
