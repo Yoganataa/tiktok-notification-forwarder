@@ -28,6 +28,12 @@ export interface AppConfig {
     cookie: string; // New
     jrmaRenewReminder: boolean; // New
   };
+  telegram: {
+      apiId: number;
+      apiHash: string;
+      botToken: string;
+      coreGroupId: string;
+  };
   database: {
     driver: DatabaseDriver;
     url: string; // Connection string for PG, or File Path for SQLite
@@ -81,6 +87,12 @@ class ConfigManager {
         downloadEngine: 'devest-alpha', // Default safe engine
         cookie: '',
         jrmaRenewReminder: false,
+      },
+      telegram: {
+        apiId: parseInt(process.env.TELEGRAM_API_ID || '0'),
+        apiHash: process.env.TELEGRAM_API_HASH || '',
+        botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+        coreGroupId: process.env.TELEGRAM_CORE_GROUP_ID || '0'
       },
       database: {
         driver: driver,

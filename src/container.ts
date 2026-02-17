@@ -30,13 +30,11 @@ const queueRepo = new QueueRepository();
 const downloaderService = new DownloaderService(systemConfigRepo);
 const notificationService = new DiscordNotificationService(userMappingRepo);
 
-const telegramConfig = {
-    apiId: parseInt(process.env.TELEGRAM_API_ID || '0'),
-    apiHash: process.env.TELEGRAM_API_HASH || '',
-    botToken: process.env.TELEGRAM_BOT_TOKEN || '',
-    coreGroupId: process.env.TELEGRAM_CORE_GROUP_ID || '0'
-};
-const telegramService = new TelegramService(logger, userMappingRepo, telegramConfig);
+// Initial load to get telegram config
+configManager.load();
+const config = configManager.get();
+
+const telegramService = new TelegramService(logger, userMappingRepo, config.telegram);
 
 const queueService = new QueueService(queueRepo, downloaderService, notificationService, telegramService, systemConfigRepo);
 const permissionService = new PermissionService(accessControlRepo);

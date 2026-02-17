@@ -40,7 +40,8 @@ export class TelegramService {
         const mapping = await this.mappingRepo.findByUsername(username);
 
         if (mapping && mapping.telegram_topic_id) {
-            return mapping.telegram_topic_id;
+            // Explicitly cast to Number to avoid type errors with some DB drivers
+            return Number(mapping.telegram_topic_id);
         }
 
         try {
@@ -66,7 +67,7 @@ export class TelegramService {
             await this.mappingRepo.updateTelegramTopic(username, topicId);
 
             this.logger.info(`Created Telegram Topic for ${username}: ${topicId}`);
-            return topicId;
+            return Number(topicId);
 
         } catch (error) {
             this.logger.error('Failed to create Telegram topic', { error });
