@@ -20,8 +20,8 @@
       "description": "The Client ID (Application ID) of your Discord bot.",
       "required": true
     },
-    "CONFIG_ENV_URL": {
-      "description": "The URL to the remote configuration file containing additional settings.",
+    "DATABASE_URL": {
+      "description": "The connection string for your PostgreSQL or SQLite database.",
       "required": true
     }
   }

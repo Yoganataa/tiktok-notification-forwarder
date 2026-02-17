@@ -99,11 +99,9 @@ class ConfigManager {
 
     try {
       const settings = await repository.findAll();
-      const isInitialState = settings.length <= 2;
       
-      if (isInitialState) {
-        logger.info('Database configuration is empty. Initializing Auto-Seed...');
-        await this.seedDatabase(repository);
+      if (settings.length === 0) {
+        logger.info('Database configuration is empty. Using environment variables/defaults.');
         return;
       }
 
@@ -150,7 +148,7 @@ class ConfigManager {
 
       if (updatesCount > 0) {
         logger.info(`Dynamic configuration: ${updatesCount} values overridden successfully.`);
-        // Update logger level if it changed (though log level is usually env only, but good practice)
+        // Update logger level if it changed
         if (this.config!.app.logLevel) {
             setLogLevel(this.config!.app.logLevel);
         }
@@ -162,32 +160,13 @@ class ConfigManager {
     }
   }
 
-  private async seedDatabase(repository: SystemConfigRepository): Promise<void> {
-    const config = this.config!;
-    const seedData = {
-      'SOURCE_BOT_IDS': config.bot.sourceBotIds.join(','),
-      'FALLBACK_CHANNEL_ID': config.bot.fallbackChannelId,
-      'AUTO_CREATE_CATEGORY_ID': config.bot.autoCreateCategoryId,
-      'CORE_SERVER_ID': config.discord.coreServerId,
-      'EXTRA_GUILD_IDS': config.discord.extraGuildIds.join(','),
-      'MANUAL_DOWNLOAD_MODE': config.bot.manualDownloadMode.toString(),
-      'DB_MAX_CONNECTIONS': config.database.maxConnections.toString(),
-      'DB_MIN_CONNECTIONS': config.database.minConnections.toString()
-    };
-
-    try {
-      for (const [key, value] of Object.entries(seedData)) {
-        await repository.set(key, value);
-      }
-      logger.info('Auto-Seed: Database successfully synchronized with environment variables.');
-    } catch (error) {
-      logger.error('Auto-Seed failed', { error: (error as Error).message });
-    }
-  }
-
   get(): AppConfig {
     if (!this.config) throw new Error('Configuration not initialized.');
     return this.config;
+  }
+
+  get isConfigured(): boolean {
+    return !!(this.config && this.config.discord.coreServerId);
   }
 
   private parseList(value: string): string[] {
