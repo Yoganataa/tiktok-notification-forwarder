@@ -8,4 +8,4 @@ services:
       - DISCORD_TOKEN
       - OWNER_ID
       - CLIENT_ID
-      - CONFIG_ENV_URL
+      - DATABASE_URL

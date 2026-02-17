@@ -1,19 +1,14 @@
 import { ActivityType } from 'discord.js';
 import { logger } from './shared/utils/logger';
-import { ConfigLoader } from './core/config/config.loader';
 
 const main = async () => {
     try {
-        // 1. Load Configuration (Local + Remote) BEFORE importing the App
-        // This ensures process.env is populated before ConfigManager reads it.
-        await ConfigLoader.load();
-
-        // 2. Dynamic Import of Application
+        // 1. Dynamic Import of Application
         // We import Application here so that any static initialization inside 'app.ts'
-        // (or its dependencies like 'config.ts') happens AFTER ConfigLoader has run.
+        // (or its dependencies like 'config.ts') happens.
         const { Application } = await import('./app');
 
-        // 3. Initialize and Start
+        // 2. Initialize and Start
         const client = new Application();
         await client.login();
         client.user?.setActivity('TikTok Live', { type: ActivityType.Watching });
