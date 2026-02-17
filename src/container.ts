@@ -10,6 +10,7 @@ import { ForwarderService } from './services/forwarder.service';
 import { QueueService } from './services/queue.service';
 import { DownloaderService } from './services/downloader.service';
 import { NotificationService } from './services/notification.service';
+import { SchedulerService } from './services/scheduler.service';
 import { MenuController } from './controllers/menu.controller';
 import { MappingController } from './controllers/admin/mapping.controller';
 import { ConfigController } from './controllers/admin/config.controller';
@@ -29,6 +30,7 @@ const notificationService = new NotificationService(userMappingRepo);
 const queueService = new QueueService(queueRepo, downloaderService, notificationService, systemConfigRepo);
 const permissionService = new PermissionService(accessControlRepo);
 const forwarderService = new ForwarderService(notificationService, queueService, userMappingRepo);
+const schedulerService = new SchedulerService();
 
 // 3. Instantiate Controllers
 const configManagerReload = async () => {
@@ -62,7 +64,8 @@ container.services = {
     forwarder: forwarderService,
     queue: queueService,
     downloader: downloaderService,
-    notification: notificationService
+    notification: notificationService,
+    scheduler: schedulerService
 };
 
 container.controllers = {

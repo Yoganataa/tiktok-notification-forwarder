@@ -3,6 +3,7 @@ import { ForwarderService } from './services/forwarder.service';
 import { QueueService } from './services/queue.service';
 import { DownloaderService } from './services/downloader.service';
 import { NotificationService } from './services/notification.service';
+import { SchedulerService } from './services/scheduler.service';
 import { UserMappingRepository } from './repositories/user-mapping.repository';
 import { AccessControlRepository } from './repositories/access-control.repository';
 import { SystemConfigRepository } from './repositories/system-config.repository';
@@ -27,6 +28,7 @@ declare module '@sapphire/pieces' {
             queue: QueueService;
             downloader: DownloaderService;
             notification: NotificationService;
+            scheduler: SchedulerService;
         };
         controllers: {
             menu: MenuController;

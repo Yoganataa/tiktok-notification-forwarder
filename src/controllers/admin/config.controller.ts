@@ -49,7 +49,7 @@ export class ConfigController {
         new StringSelectMenuOptionBuilder().setLabel('Core Identity').setValue('cat_identity').setDescription('Server ID, Fallback Channel, Auto-Category').setEmoji('🆔'),
         new StringSelectMenuOptionBuilder().setLabel('Bot Logic').setValue('cat_logic').setDescription('Source Bots, Extra Guilds, Manual Mode').setEmoji('🤖'),
         new StringSelectMenuOptionBuilder().setLabel('Downloader').setValue('cat_downloader').setDescription('Engine, Cookie, Auto-Download').setEmoji('⬇️'),
-        new StringSelectMenuOptionBuilder().setLabel('System & Updates').setValue('cat_system').setDescription('Upstream Repo, Branch, Log Level').setEmoji('⚙️')
+        new StringSelectMenuOptionBuilder().setLabel('System & Updates').setValue('cat_system').setDescription('Upstream Repo, Branch, Log Level, JRMA').setEmoji('⚙️')
       );
 
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
@@ -142,11 +142,13 @@ export class ConfigController {
     const upstreamRepoInput = new TextInputBuilder().setCustomId('UPSTREAM_REPO').setLabel('Upstream Repo URL').setStyle(TextInputStyle.Short).setValue(config.update.upstreamRepo).setRequired(true);
     const upstreamBranchInput = new TextInputBuilder().setCustomId('UPSTREAM_BRANCH').setLabel('Upstream Branch').setStyle(TextInputStyle.Short).setValue(config.update.upstreamBranch).setRequired(true);
     const logLevelInput = new TextInputBuilder().setCustomId('LOG_LEVEL').setLabel('Log Level (info/debug/warn/error)').setStyle(TextInputStyle.Short).setValue(config.app.logLevel).setRequired(true);
+    const jrmaInput = new TextInputBuilder().setCustomId('JRMA_RENEW_REMINDER').setLabel('JRMA Reminder (true/false)').setStyle(TextInputStyle.Short).setValue(config.bot.jrmaRenewReminder.toString()).setRequired(true);
 
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(upstreamRepoInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(upstreamBranchInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(logLevelInput)
+      new ActionRowBuilder<TextInputBuilder>().addComponents(logLevelInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(jrmaInput)
     );
 
     await interaction.showModal(modal);
@@ -211,10 +213,12 @@ export class ConfigController {
     const repo = interaction.fields.getTextInputValue('UPSTREAM_REPO');
     const branch = interaction.fields.getTextInputValue('UPSTREAM_BRANCH');
     const logLevel = interaction.fields.getTextInputValue('LOG_LEVEL');
+    const jrma = interaction.fields.getTextInputValue('JRMA_RENEW_REMINDER');
 
     await this.systemConfigRepo.set('UPSTREAM_REPO', repo);
     await this.systemConfigRepo.set('UPSTREAM_BRANCH', branch);
     await this.systemConfigRepo.set('LOG_LEVEL', logLevel);
+    await this.systemConfigRepo.set('JRMA_RENEW_REMINDER', jrma.toLowerCase() === 'true' ? 'true' : 'false');
 
     await this.onConfigReload();
     await interaction.editReply('✅ **System Config Updated!**');
