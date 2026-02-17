@@ -173,6 +173,16 @@ export class MenuController {
         const username = id.replace('modal_edit_mapping_', '');
         await this.mappingController.handleEditModal(interaction, username);
     }
+    // --- New Setup Modals ---
+    else if (id === 'setup_modal_identity') {
+        await this.configController.handleIdentitySubmit(interaction);
+    } else if (id === 'setup_modal_logic') {
+        await this.configController.handleLogicSubmit(interaction);
+    } else if (id === 'setup_modal_downloader') {
+        await this.configController.handleDownloaderSubmit(interaction);
+    } else if (id === 'setup_modal_system') {
+        await this.configController.handleSystemSubmit(interaction);
+    }
   }
 
   async handleSelectMenu(interaction: AnySelectMenuInteraction): Promise<void> {
@@ -191,6 +201,13 @@ export class MenuController {
     if (id === 'select_smart_remove') {
         await interaction.deferUpdate();
         await this.configController.handleRemoveSmartChannels(interaction as StringSelectMenuInteraction);
+        return;
+    }
+
+    // --- New Setup Category Select ---
+    if (id === 'setup_category_select') {
+        // Do NOT deferUpdate here because handleConfigMenuSelect shows a modal
+        await this.configController.handleConfigMenuSelect(interaction as StringSelectMenuInteraction);
         return;
     }
 
