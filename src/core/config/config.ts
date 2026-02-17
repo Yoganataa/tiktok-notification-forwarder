@@ -77,7 +77,7 @@ class ConfigManager {
         autoCreateCategoryId: '0',
         manualDownloadMode: false,
         autoDownload: true, // Default
-        downloadEngine: 'devest-alpha', // Default
+        downloadEngine: 'devest-alpha', // Default safe engine
         cookie: '',
       },
       database: {
