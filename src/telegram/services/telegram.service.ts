@@ -30,7 +30,7 @@ export class TelegramService {
         try {
             this.mainGroupId = BigInt(this.config.coreGroupId);
         } catch (e) {
-            this.logger.error('Invalid Core Group ID for Telegram', { error: e });
+            this.logger.error('Invalid Core Group ID for Telegram', { error: (e as Error).message });
         }
 
         this.logger.info('✅ Telegram Service Connected');
@@ -44,14 +44,47 @@ export class TelegramService {
             return Number(mapping.telegram_topic_id);
         }
 
-        try {
-            if (!this.mainGroupId) throw new Error('Main Group ID not set');
+        if (!this.mainGroupId) {
+             this.logger.error('Main Group ID not set for Telegram Service');
+             return 0;
+        }
 
-            // Logic to create a forum topic
+        const targetTitle = `🎥 ${username}`;
+
+        try {
+            // 1. Check if topic already exists in Telegram (Split-brain fix)
+            // We search through existing topics first.
+
+            // Using Api.channels.GetForumTopics
+            const topicsResult = await this.client.invoke(
+                new Api.channels.GetForumTopics({
+                    channel: this.mainGroupId,
+                    offsetDate: 0,
+                    offsetId: 0,
+                    offsetTopic: 0,
+                    limit: 100, // Fetch up to 100 recent topics
+                    q: username // Try to filter by username directly if supported
+                })
+            ) as Api.messages.ForumTopics; // Correct return type for channels.GetForumTopics is messages.ForumTopics
+
+            if (topicsResult && topicsResult.topics) {
+                const existingTopic = topicsResult.topics.find((t: any) => t.title === targetTitle);
+
+                if (existingTopic) {
+                    const foundId = existingTopic.id;
+                    this.logger.info(`Found existing Telegram Topic for ${username}: ${foundId}. Syncing DB...`);
+
+                    // Sync DB
+                    await this.mappingRepo.updateTelegramTopic(username, foundId);
+                    return Number(foundId);
+                }
+            }
+
+            // 2. If not found, create new topic
             const result = await this.client.invoke(
                 new Api.channels.CreateForumTopic({
                     channel: this.mainGroupId,
-                    title: `🎥 ${username}`,
+                    title: targetTitle,
                     iconColor: 0x6FB9F0
                 })
             ) as Api.Updates;
@@ -61,7 +94,7 @@ export class TelegramService {
             const update = result.updates.find((u: any) => u.className === 'UpdateChannelForumTopic') as any;
             const topicId = update?.id || update?.topicId;
 
-            if (!topicId) throw new Error('Failed to retrieve new Topic ID');
+            if (!topicId) throw new Error('Failed to retrieve new Topic ID from Telegram response');
 
             // Save to DB
             await this.mappingRepo.updateTelegramTopic(username, topicId);
@@ -70,7 +103,8 @@ export class TelegramService {
             return Number(topicId);
 
         } catch (error) {
-            this.logger.error('Failed to create Telegram topic', { error });
+            const errorMsg = (error as Error).message || JSON.stringify(error);
+            this.logger.error('Failed to get/create Telegram topic', { error: errorMsg });
             return 0; // 0 = General Topic fallback or error
         }
     }
@@ -87,7 +121,8 @@ export class TelegramService {
                 supportsStreaming: true,
             });
         } catch (error) {
-             this.logger.error('Failed to send video to Telegram', { error });
+             const errorMsg = (error as Error).message || JSON.stringify(error);
+             this.logger.error('Failed to send video to Telegram', { error: errorMsg });
         }
     }
 
@@ -99,7 +134,8 @@ export class TelegramService {
                  replyTo: topicId
              });
         } catch (error) {
-            this.logger.error('Failed to send message to Telegram', { error });
+            const errorMsg = (error as Error).message || JSON.stringify(error);
+            this.logger.error('Failed to send message to Telegram', { error: errorMsg });
         }
     }
 }
