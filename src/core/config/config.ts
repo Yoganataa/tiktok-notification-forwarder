@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import { ValidationError } from '../errors/validation.error';
-import { logger, setLogLevel } from '../../shared/utils/logger';
-import { SystemConfigRepository } from '../../repositories/system-config.repository';
+import { logger, setLogLevel } from '../utils/logger';
+import { SystemConfigRepository } from '../repositories/system-config.repository';
 
 dotenv.config();
 
