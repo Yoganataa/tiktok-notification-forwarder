@@ -25,7 +25,7 @@ export class SetupCommand extends Subcommand {
                 .addSubcommand((sub) =>
                     sub
                         .setName('interactive')
-                        .setDescription('Launch interactive setup wizard (Modal)')
+                        .setDescription('Launch interactive setup wizard (Menu)')
                 )
                 .addSubcommand((sub) =>
                     sub
@@ -67,69 +67,12 @@ export class SetupCommand extends Subcommand {
     public async interactive(interaction: Subcommand.ChatInputCommandInteraction) {
         if (!await this.checkOwner(interaction)) return;
 
-        const modal = new ModalBuilder()
-            .setCustomId('setup_modal')
-            .setTitle('Core Configuration Setup');
-
-        const coreServerInput = new TextInputBuilder()
-            .setCustomId('CORE_SERVER_ID')
-            .setLabel('Core Server ID')
-            .setPlaceholder('The main server ID for admin commands')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setValue(configManager.get().discord.coreServerId || '');
-
-        const fallbackChannelInput = new TextInputBuilder()
-            .setCustomId('FALLBACK_CHANNEL_ID')
-            .setLabel('Fallback Channel ID')
-            .setPlaceholder('Channel ID for errors/logs')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false)
-            .setValue(configManager.get().bot.fallbackChannelId === '0' ? '' : configManager.get().bot.fallbackChannelId);
-
-        const autoCategoryInput = new TextInputBuilder()
-            .setCustomId('AUTO_CREATE_CATEGORY_ID')
-            .setLabel('Auto-Create Category ID')
-            .setPlaceholder('Category ID for new ticket channels')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false)
-            .setValue(configManager.get().bot.autoCreateCategoryId === '0' ? '' : configManager.get().bot.autoCreateCategoryId);
-
-        const row1 = new ActionRowBuilder<TextInputBuilder>().addComponents(coreServerInput);
-        const row2 = new ActionRowBuilder<TextInputBuilder>().addComponents(fallbackChannelInput);
-        const row3 = new ActionRowBuilder<TextInputBuilder>().addComponents(autoCategoryInput);
-
-        modal.addComponents(row1, row2, row3);
-
-        await interaction.showModal(modal);
-
+        // Use the new categorized menu
         try {
-            const submitted = await interaction.awaitModalSubmit({
-                time: 60000,
-                filter: (i) => i.customId === 'setup_modal' && i.user.id === interaction.user.id
-            });
-
-            await submitted.deferReply({ ephemeral: true });
-
-            const coreId = submitted.fields.getTextInputValue('CORE_SERVER_ID');
-            const fallbackId = submitted.fields.getTextInputValue('FALLBACK_CHANNEL_ID');
-            const catId = submitted.fields.getTextInputValue('AUTO_CREATE_CATEGORY_ID');
-
-            await this.container.repos.systemConfig.set('CORE_SERVER_ID', coreId);
-            if (fallbackId) await this.container.repos.systemConfig.set('FALLBACK_CHANNEL_ID', fallbackId);
-            if (catId) await this.container.repos.systemConfig.set('AUTO_CREATE_CATEGORY_ID', catId);
-
-            // Reload config
-            await configManager.loadFromDatabase(this.container.repos.systemConfig);
-
-            await submitted.editReply(`✅ Configuration saved!\nCore Server: ${coreId}\nFallback: ${fallbackId || 'N/A'}\nCategory: ${catId || 'N/A'}`);
-
+            await this.container.controllers.config.showConfigMenu(interaction);
         } catch (error) {
-            if (error instanceof Error && error.message.includes('time')) {
-                // Modal timed out
-            } else {
-                logger.error('Interactive Setup Error', error);
-            }
+            logger.error('Interactive Setup Error', error);
+            await interaction.reply({ content: '❌ Failed to launch interactive setup.', ephemeral: true });
         }
     }
 
