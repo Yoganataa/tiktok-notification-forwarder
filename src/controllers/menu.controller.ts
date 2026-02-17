@@ -10,6 +10,7 @@ import {
   ChannelSelectMenuInteraction,
   AnySelectMenuInteraction
 } from 'discord.js';
+import si from 'systeminformation';
 import { PermissionService } from '../services/permission.service';
 import { SystemConfigRepository } from '../repositories/system-config.repository';
 import { UserMappingRepository } from '../repositories/user-mapping.repository';
@@ -61,6 +62,17 @@ export class MenuController {
     }
     if (id === 'menu_tiktok') {
         await interaction.reply({ content: 'Use /download command directly.', ephemeral: true });
+        return;
+    }
+
+    // Stats Handler
+    if (id === 'menu_stats') {
+        if (!(await this.permissionService.isAdminOrHigher(interaction.user.id))) {
+            await interaction.reply({ content: '⛔ Access Denied.', ephemeral: true });
+            return;
+        }
+        await interaction.deferUpdate();
+        await this.showStatsPage(interaction);
         return;
     }
 
@@ -249,7 +261,12 @@ export class MenuController {
           .setCustomId('menu_tiktok')
           .setLabel('Download')
           .setStyle(ButtonStyle.Success)
-          .setEmoji('⬇️')
+          .setEmoji('⬇️'),
+        new ButtonBuilder()
+          .setCustomId('menu_stats')
+          .setLabel('Stats')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('📊')
       );
 
     const payload = { embeds: [embed], components: [row] };
@@ -259,6 +276,56 @@ export class MenuController {
       else await interaction.editReply(payload);
     } else {
       await interaction.reply({ ...payload, ephemeral: true });
+    }
+  }
+
+  async showStatsPage(interaction: ButtonInteraction | RepliableInteraction): Promise<void> {
+    try {
+        const osInfo = await si.osInfo();
+        const cpu = await si.cpu();
+        const mem = await si.mem();
+        const load = await si.currentLoad();
+        const netStats = await si.networkStats();
+
+        const uptimeSeconds = si.time().uptime;
+        const uptimeHours = (uptimeSeconds / 3600).toFixed(1);
+        const processUptime = (process.uptime() / 3600).toFixed(2);
+
+        const totalRx = (netStats.reduce((acc, iface) => acc + iface.rx_bytes, 0) / 1024 / 1024).toFixed(0);
+        const totalTx = (netStats.reduce((acc, iface) => acc + iface.tx_bytes, 0) / 1024 / 1024).toFixed(0);
+
+        const ping = interaction.client.ws.ping;
+
+        const embed = new EmbedBuilder()
+            .setTitle('📊 System Statistics')
+            .setColor(0x3498db)
+            .addFields(
+                { name: '🖥️ OS', value: `${osInfo.distro} ${osInfo.release} (${osInfo.arch})\nKernel: ${osInfo.kernel}`, inline: true },
+                { name: '⚙️ CPU', value: `${cpu.manufacturer} ${cpu.brand}\nLoad: ${load.currentLoad.toFixed(1)}%`, inline: true },
+                { name: '🧠 RAM', value: `${(mem.active / 1024 / 1024 / 1024).toFixed(1)}GB / ${(mem.total / 1024 / 1024 / 1024).toFixed(1)}GB\n(${(mem.active / mem.total * 100).toFixed(0)}%)`, inline: true },
+                { name: '🌐 Network', value: `⬇️ ${totalRx} MB\n⬆️ ${totalTx} MB`, inline: true },
+                { name: '⏱️ Uptime', value: `System: ${uptimeHours}h\nBot: ${processUptime}h`, inline: true },
+                { name: '📶 Ping', value: `${ping}ms`, inline: true },
+                { name: '🏷️ Host', value: osInfo.hostname || 'N/A', inline: false }
+            )
+            .setTimestamp();
+
+        const row = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(
+                new ButtonBuilder().setCustomId('nav_back_main').setLabel('Back').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
+                new ButtonBuilder().setCustomId('menu_stats').setLabel('Refresh').setStyle(ButtonStyle.Primary).setEmoji('🔄')
+            );
+
+        if (interaction.isButton()) {
+             await interaction.editReply({ embeds: [embed], components: [row] });
+        } else {
+             await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+        }
+
+    } catch (error) {
+        if (interaction.isRepliable() && !interaction.replied) {
+             await interaction.reply({ content: '❌ Failed to fetch stats.', ephemeral: true });
+        }
     }
   }
 

@@ -1,4 +1,3 @@
-import { ActivityType } from 'discord.js';
 import { logger } from './shared/utils/logger';
 
 const main = async () => {
@@ -9,7 +8,7 @@ const main = async () => {
         // 2. Initialize and Start
         const client = new Application();
         await client.login();
-        client.user?.setActivity('TikTok Live', { type: ActivityType.Watching });
+        // client.user?.setActivity(...) is now handled in ReadyListener for dynamic updates
 
     } catch (error) {
         logger.error('Failed to start application', error);
