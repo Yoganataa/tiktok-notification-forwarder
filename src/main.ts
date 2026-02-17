@@ -4,8 +4,6 @@ import { logger } from './shared/utils/logger';
 const main = async () => {
     try {
         // 1. Dynamic Import of Application
-        // We import Application here so that any static initialization inside 'app.ts'
-        // (or its dependencies like 'config.ts') happens.
         const { Application } = await import('./app');
 
         // 2. Initialize and Start

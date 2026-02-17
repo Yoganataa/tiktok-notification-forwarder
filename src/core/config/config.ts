@@ -23,6 +23,9 @@ export interface AppConfig {
     fallbackChannelId: string;
     autoCreateCategoryId: string;
     manualDownloadMode: boolean;
+    autoDownload: boolean; // New
+    downloadEngine: string; // New
+    cookie: string; // New
   };
   database: {
     driver: DatabaseDriver;
@@ -65,14 +68,17 @@ class ConfigManager {
         token: process.env.DISCORD_TOKEN!,
         clientId: process.env.CLIENT_ID!,
         ownerId: process.env.OWNER_ID!,
-        coreServerId: process.env.CORE_SERVER_ID || '',
-        extraGuildIds: this.parseList(process.env.EXTRA_GUILD_IDS || ''),
+        coreServerId: '', // Wait for DB load
+        extraGuildIds: [],
       },
       bot: {
-        sourceBotIds: this.parseList(process.env.SOURCE_BOT_IDS || ''),
-        fallbackChannelId: process.env.FALLBACK_CHANNEL_ID || '0',
-        autoCreateCategoryId: process.env.AUTO_CREATE_CATEGORY_ID || '0',
-        manualDownloadMode: process.env.MANUAL_DOWNLOAD_MODE === 'true',
+        sourceBotIds: [],
+        fallbackChannelId: '0',
+        autoCreateCategoryId: '0',
+        manualDownloadMode: false,
+        autoDownload: true, // Default
+        downloadEngine: 'devest-alpha', // Default
+        cookie: '',
       },
       database: {
         driver: driver,
@@ -83,11 +89,11 @@ class ConfigManager {
       },
       app: {
         nodeEnv: (process.env.NODE_ENV as any) || 'development',
-        logLevel: process.env.LOG_LEVEL || 'info',
+        logLevel: 'info',
       },
       update: {
-        upstreamRepo: process.env.UPSTREAM_REPO || 'https://github.com/Yoganataa/tiktok-notification-forwarder/',
-        upstreamBranch: process.env.UPSTREAM_BRANCH || 'main',
+        upstreamRepo: 'https://github.com/Yoganataa/tiktok-notification-forwarder/',
+        upstreamBranch: 'main',
       },
     };
 
@@ -101,7 +107,7 @@ class ConfigManager {
       const settings = await repository.findAll();
       
       if (settings.length === 0) {
-        logger.info('Database configuration is empty. Using environment variables/defaults.');
+        logger.info('Database configuration is empty. Using defaults.');
         return;
       }
 
@@ -111,9 +117,17 @@ class ConfigManager {
       for (const setting of settings) {
         const { key, value } = setting;
         switch (key) {
+          case 'CORE_SERVER_ID':
+            this.config!.discord.coreServerId = value;
+            updatesCount++;
+            break;
           case 'SOURCE_BOT_IDS': 
             this.config!.bot.sourceBotIds = this.parseList(value); 
             updatesCount++; 
+            break;
+          case 'EXTRA_GUILD_IDS':
+            this.config!.discord.extraGuildIds = this.parseList(value);
+            updatesCount++;
             break;
           case 'FALLBACK_CHANNEL_ID': 
             this.config!.bot.fallbackChannelId = value; 
@@ -123,16 +137,32 @@ class ConfigManager {
             this.config!.bot.autoCreateCategoryId = value;
             updatesCount++;
             break;
-          case 'CORE_SERVER_ID': 
-            this.config!.discord.coreServerId = value; 
-            updatesCount++; 
-            break;
-          case 'EXTRA_GUILD_IDS':
-            this.config!.discord.extraGuildIds = this.parseList(value);
-            updatesCount++;
-            break;
           case 'MANUAL_DOWNLOAD_MODE':
             this.config!.bot.manualDownloadMode = value === 'true';
+            updatesCount++;
+            break;
+          case 'AUTO_DOWNLOAD':
+            this.config!.bot.autoDownload = value === 'true';
+            updatesCount++;
+            break;
+          case 'DOWNLOAD_ENGINE':
+            this.config!.bot.downloadEngine = value;
+            updatesCount++;
+            break;
+          case 'COOKIE':
+            this.config!.bot.cookie = value;
+            updatesCount++;
+            break;
+          case 'UPSTREAM_REPO':
+            this.config!.update.upstreamRepo = value;
+            updatesCount++;
+            break;
+          case 'UPSTREAM_BRANCH':
+            this.config!.update.upstreamBranch = value;
+            updatesCount++;
+            break;
+          case 'LOG_LEVEL':
+            this.config!.app.logLevel = value;
             updatesCount++;
             break;
           case 'DB_MAX_CONNECTIONS': 
@@ -157,6 +187,7 @@ class ConfigManager {
       logger.error('Critical: Failed to load dynamic config from database', { 
         error: (error as Error).message 
       });
+      // Do NOT throw. Allow setup mode.
     }
   }
 
