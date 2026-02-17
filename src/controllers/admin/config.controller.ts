@@ -221,52 +221,12 @@ export class ConfigController {
     await this.showConfigMenu(interaction);
   }
 
-  // --- Environment Page (Legacy but kept for 'Edit Env' button consistency if needed) ---
-  // Re-implementing simplified version if needed, or deprecating.
-  // User asked for "Completely rewrite", implying this replaces the old one.
-  // However, `showEnvironmentPage` was used in `src/controllers/menu.controller.ts` potentially.
-  // I should check references. But for now, I will implement the requested `showConfigMenu`.
-
-  // Note: I will keep `showEnvironmentPage` methods if they are still called by other controllers,
-  // but strictly focusing on the new setup requirement.
-  // Wait, the prompt says "Completely rewrite this controller".
-  // If I remove `showEnvironmentPage`, I might break `MenuController`.
-  // Let's check `MenuController` usage.
-  // Ideally, I should preserve `showEnvironmentPage` or redirect it to `showConfigMenu`.
-  // Given "Completely rewrite", I assume I should REPLACE the logic.
-  // But to be safe, I'll keep the `showEnvironmentPage` methods but aliased or separate if they serve different UI flows (like the button interaction).
-
-  // Actually, let's keep the existing `showEnvironmentPage` logic for the `/menu` flow,
-  // and ADD the new `showConfigMenu` logic for the `/setup` flow.
-  // Or better, update `showEnvironmentPage` to use the new categorized approach?
-  // The user asked to "Refactor ... to handle multiple configuration categories".
-  // I'll add the new methods.
+  // --- Environment Page (Legacy) ---
+  // Updated with STRICT Filtering for Engine Selection
 
   async showEnvironmentPage(interaction: ButtonInteraction | RepliableInteraction | StringSelectMenuInteraction): Promise<void> {
-      // Re-use the new menu for consistency?
-      // The old environment page had engine selection logic.
-      // The new menu has `Downloader` category.
-      // I'll leave the old one as is for now to avoid breaking changes in `/menu`,
-      // but the `SetupCommand` will use `showConfigMenu`.
-      // Actually, I'll just append the new methods.
-      // The prompt says "Completely rewrite", but usually that means "Change the structure to support X".
-      // I will keep existing methods to be safe, but add the new ones.
-
-      // WAIT: "Completely rewrite this controller to handle multiple configuration categories using a StringSelectMenu."
-      // This implies the old logic might be obsolete or should be merged.
-      // I'll paste the old logic back in too to be safe, but focus on the new methods.
-      // Actually, looking at the old code, `showEnvironmentPage` was quite complex with fallbacks.
-      // The new request seems to want a cleaner "Edit All Configs" approach.
-      // I will include the old logic for backward compatibility with `MenuController` interactions
-      // (like `btn_conf_smart`, `select_engine_primary` etc.) unless I'm sure they are removed.
-
-      // I will include the previous methods + new methods.
-
-      // ... (Previous methods from read_file) ...
-      // I will re-output them to ensure the file is complete.
-
       const config = configManager.get();
-      const primaryEngine = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'devest';
+      const primaryEngine = await this.systemConfigRepo.get('DOWNLOAD_ENGINE') || 'devest-alpha';
       const fallback1 = await this.systemConfigRepo.get('DOWNLOAD_ENGINE_FALLBACK_1') || 'none';
       const fallback2 = await this.systemConfigRepo.get('DOWNLOAD_ENGINE_FALLBACK_2') || 'none';
       const autoDl = (await this.systemConfigRepo.get('AUTO_DOWNLOAD')) !== 'false';
@@ -282,18 +242,22 @@ export class ConfigController {
             { name: 'Download Strategy', value: `1. **${primaryEngine}**\n2. ${fallback1}\n3. ${fallback2}`, inline: false }
         );
 
-      const availableEngines = container.services.downloader.getRegisteredEngineNames();
+      // STRICT FILTER: Only allow Devest Alpha, Devest Beta, YtDlp
+      const allowedEngines = ['devest-alpha', 'devest-beta', 'ytdlp'];
 
       const buildOptionsRefined = (selectedValue: string, excludeValues: string[], includeNone: boolean) => {
           const options: StringSelectMenuOptionBuilder[] = [];
           if (includeNone) {
               options.push(new StringSelectMenuOptionBuilder().setLabel('None').setValue('none').setDescription('Disable this fallback slot').setDefault(selectedValue === 'none'));
           }
-          availableEngines.forEach(engine => {
+          allowedEngines.forEach(engine => {
               if (!excludeValues.includes(engine)) {
                   let label = engine;
                   let description = '';
-                  if (engine === 'devest') { label = 'Devest (Auto-HD)'; description = 'Smart HD with fallback'; }
+                  if (engine === 'devest-alpha') { label = 'Devest Alpha (TikWM)'; description = 'Primary TikTok Engine'; }
+                  if (engine === 'devest-beta') { label = 'Devest Beta (SSSTik)'; description = 'Secondary TikTok Engine'; }
+                  if (engine === 'ytdlp') { label = 'Yt-Dlp (Universal)'; description = 'Universal Fallback'; }
+
                   const option = new StringSelectMenuOptionBuilder().setLabel(label).setValue(engine).setDefault(selectedValue === engine);
                   if (description.length > 0) option.setDescription(description);
                   options.push(option);
@@ -327,7 +291,6 @@ export class ConfigController {
       }
   }
 
-  // Preserve existing handlers for the old menu flow
   async handleEngineSelect(interaction: StringSelectMenuInteraction): Promise<void> {
       const selectedValue = interaction.values[0];
       const customId = interaction.customId;
@@ -345,10 +308,7 @@ export class ConfigController {
       await this.showEnvironmentPage(interaction);
   }
 
-  // Reuse showEditModal logic? The new flow replaces it.
-  // I'll keep showEditModal for the 'btn_edit_env' button in the old menu.
   async showEditModal(interaction: ButtonInteraction) {
-      // Logic from before...
       const config = configManager.get();
       const modal = new ModalBuilder().setCustomId('modal_env_edit').setTitle('Edit Configuration');
       const inputs = [
@@ -364,7 +324,6 @@ export class ConfigController {
   }
 
   async handleEditModal(interaction: ModalSubmitInteraction, showMainMenuCallback: (i: RepliableInteraction) => Promise<void>): Promise<void> {
-      // Logic from before...
       const sourceBots = interaction.fields.getTextInputValue('env_source_bots');
       const fallbackChannel = interaction.fields.getTextInputValue('env_fallback_channel');
       const autoCreateCategory = interaction.fields.getTextInputValue('env_auto_create_category');
@@ -381,10 +340,7 @@ export class ConfigController {
       await interaction.followUp({ content: '✅ Configuration saved!', ephemeral: true });
   }
 
-  // Preserve Smart DL logic
   async showSmartDownloadPage(interaction: ButtonInteraction | RepliableInteraction | StringSelectMenuInteraction | ChannelSelectMenuInteraction): Promise<void> {
-      // ... (Same as before, abbreviated for implementation phase) ...
-      // I will implement this fully in the write_file step.
       try {
           const manualMode = await this.systemConfigRepo.get('MANUAL_DOWNLOAD_MODE');
           const isManualMode = manualMode === 'true';

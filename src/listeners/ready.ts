@@ -1,5 +1,5 @@
 import { Listener } from '@sapphire/framework';
-import { Client, Events } from 'discord.js';
+import { Client, Events, ActivityType } from 'discord.js';
 import { logger } from '../shared/utils/logger';
 import { configManager } from '../core/config/config';
 
@@ -20,6 +20,10 @@ export class ReadyListener extends Listener {
             logger.warn('⚠️ Bot is in SETUP MODE. Run /setup import to configure.');
             return;
         }
+
+        // Dynamic Status
+        const serverCount = client.guilds.cache.size;
+        client.user?.setActivity(`${serverCount} Servers`, { type: ActivityType.Watching });
 
         await this.cleanGlobalCommands(client);
         await this.logServerInfo(client);
