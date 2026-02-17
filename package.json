@@ -62,5 +62,11 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "requiredEnv": [
+    "DISCORD_TOKEN",
+    "OWNER_ID",
+    "CLIENT_ID",
+    "CONFIG_ENV_URL"
+  ]
 }
