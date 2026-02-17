@@ -48,6 +48,7 @@ export class Application extends SapphireClient {
             await configManager.loadFromDatabase(container.repos.systemConfig);
 
             await initServices();
+            container.services.scheduler.init(this);
 
             setInterval(() => container.services.queue.processQueue(this), 5000);
 

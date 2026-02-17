@@ -26,6 +26,7 @@ export interface AppConfig {
     autoDownload: boolean; // New
     downloadEngine: string; // New
     cookie: string; // New
+    jrmaRenewReminder: boolean; // New
   };
   database: {
     driver: DatabaseDriver;
@@ -79,6 +80,7 @@ class ConfigManager {
         autoDownload: true, // Default
         downloadEngine: 'devest-alpha', // Default safe engine
         cookie: '',
+        jrmaRenewReminder: false,
       },
       database: {
         driver: driver,
@@ -151,6 +153,10 @@ class ConfigManager {
             break;
           case 'COOKIE':
             this.config!.bot.cookie = value;
+            updatesCount++;
+            break;
+          case 'JRMA_RENEW_REMINDER':
+            this.config!.bot.jrmaRenewReminder = value === 'true';
             updatesCount++;
             break;
           case 'UPSTREAM_REPO':
