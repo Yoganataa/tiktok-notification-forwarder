@@ -1,7 +1,7 @@
 import { Subcommand } from '@sapphire/plugin-subcommands';
 import { ApplyOptions } from '@sapphire/decorators';
-import { ApplicationCommandRegistry, Command } from '@sapphire/framework';
-import { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder, ModalSubmitInteraction } from 'discord.js';
+import { ApplicationCommandRegistry } from '@sapphire/framework';
+import { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder } from 'discord.js';
 import axios from 'axios';
 import { configManager } from '../../core/config/config';
 import { logger } from '../../shared/utils/logger';
@@ -52,10 +52,7 @@ export class SetupCommand extends Subcommand {
     }
 
     private async checkOwner(interaction: Subcommand.ChatInputCommandInteraction): Promise<boolean> {
-        // We must check config.ownerId manually because DB might be empty
-        // and we want to rely on the ENV variable for initial setup access.
         const ownerId = process.env.OWNER_ID;
-        // Note: configManager.get().discord.ownerId also comes from process.env.OWNER_ID
 
         if (interaction.user.id !== ownerId) {
             await interaction.reply({
@@ -69,8 +66,6 @@ export class SetupCommand extends Subcommand {
 
     public async interactive(interaction: Subcommand.ChatInputCommandInteraction) {
         if (!await this.checkOwner(interaction)) return;
-
-        // Do NOT deferReply() here, otherwise showModal will fail.
 
         const modal = new ModalBuilder()
             .setCustomId('setup_modal')
@@ -108,7 +103,6 @@ export class SetupCommand extends Subcommand {
 
         await interaction.showModal(modal);
 
-        // Handle the submission
         try {
             const submitted = await interaction.awaitModalSubmit({
                 time: 60000,
@@ -132,7 +126,7 @@ export class SetupCommand extends Subcommand {
 
         } catch (error) {
             if (error instanceof Error && error.message.includes('time')) {
-                // Modal timed out, do nothing or user cancelled
+                // Modal timed out
             } else {
                 logger.error('Interactive Setup Error', error);
             }
@@ -159,7 +153,7 @@ export class SetupCommand extends Subcommand {
                 if (parts.length < 2) continue;
 
                 const key = parts[0].trim();
-                const value = parts.slice(1).join('=').trim().replace(/^['"]|['"]$/g, ''); // Remove quotes
+                const value = parts.slice(1).join('=').trim().replace(/^['"]|['"]$/g, '');
 
                 await this.container.repos.systemConfig.set(key, value);
                 count++;
@@ -204,10 +198,10 @@ export class SetupCommand extends Subcommand {
         const output = [
             '**Current Configuration State:**',
             `Core Server ID: \`${config.discord.coreServerId || 'NOT SET'}\``,
-            `Fallback Channel: \`${config.bot.fallbackChannelId}\``,
-            `Auto-Create Category: \`${config.bot.autoCreateCategoryId}\``,
-            `Manual Download Mode: \`${config.bot.manualDownloadMode}\``,
-            `Is Configured: \`${configManager.isConfigured ? 'YES' : 'NO'}\``
+            `Is Configured: \`${configManager.isConfigured ? 'YES' : 'NO'}\``,
+            `Auto Download: \`${config.bot.autoDownload}\``,
+            `Download Engine: \`${config.bot.downloadEngine}\``,
+            `Upstream Repo: \`${config.update.upstreamRepo}\``
         ].join('\n');
 
         await interaction.editReply(output);

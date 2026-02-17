@@ -17,8 +17,7 @@ export class ReadyListener extends Listener {
         logger.info(`✅ Bot authenticated as ${username} (${id})`);
 
         if (!configManager.isConfigured) {
-            logger.warn('⚠️ Bot is in SETUP MODE. Please run /setup import or /setup interactive to configure the Core Server.');
-            // Skip cleaning commands and logging server info to ensure /setup (Global) remains available
+            logger.warn('⚠️ Bot is in SETUP MODE. Run /setup import to configure.');
             return;
         }
 
