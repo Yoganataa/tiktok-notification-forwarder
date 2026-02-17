@@ -1,22 +1,24 @@
 import '@sapphire/plugin-subcommands/register';
-import './container.types'; // Import types augmentation
+import './core/types/container.types'; // Import types augmentation
 import { container } from '@sapphire/framework';
-import { UserMappingRepository } from './repositories/user-mapping.repository';
-import { AccessControlRepository } from './repositories/access-control.repository';
-import { SystemConfigRepository } from './repositories/system-config.repository';
-import { QueueRepository } from './repositories/queue.repository';
-import { PermissionService } from './services/permission.service';
-import { ForwarderService } from './services/forwarder.service';
-import { QueueService } from './services/queue.service';
-import { DownloaderService } from './services/downloader.service';
-import { NotificationService } from './services/notification.service';
-import { SchedulerService } from './services/scheduler.service';
-import { MenuController } from './controllers/menu.controller';
-import { MappingController } from './controllers/admin/mapping.controller';
-import { ConfigController } from './controllers/admin/config.controller';
-import { RoleController } from './controllers/admin/role.controller';
-import { DownloadController } from './controllers/download.controller';
+import { UserMappingRepository } from './core/repositories/user-mapping.repository';
+import { AccessControlRepository } from './core/repositories/access-control.repository';
+import { SystemConfigRepository } from './core/repositories/system-config.repository';
+import { QueueRepository } from './core/repositories/queue.repository';
+import { PermissionService } from './core/services/permission.service';
+import { ForwarderService } from './discord/services/forwarder.service';
+import { QueueService } from './core/services/queue.service';
+import { DownloaderService } from './core/downloader/downloader.service';
+import { DiscordNotificationService } from './discord/services/notification.service';
+import { SchedulerService } from './discord/services/scheduler.service';
+import { TelegramService } from './telegram/services/telegram.service';
+import { MenuController } from './discord/controllers/menu.controller';
+import { MappingController } from './discord/controllers/admin/mapping.controller';
+import { ConfigController } from './discord/controllers/admin/config.controller';
+import { RoleController } from './discord/controllers/admin/role.controller';
+import { DownloadController } from './discord/controllers/download.controller';
 import { configManager } from './core/config/config';
+import { logger } from './core/utils/logger';
 
 // 1. Instantiate Core Repositories
 const userMappingRepo = new UserMappingRepository();
@@ -26,8 +28,17 @@ const queueRepo = new QueueRepository();
 
 // 2. Instantiate Services
 const downloaderService = new DownloaderService(systemConfigRepo);
-const notificationService = new NotificationService(userMappingRepo);
-const queueService = new QueueService(queueRepo, downloaderService, notificationService, systemConfigRepo);
+const notificationService = new DiscordNotificationService(userMappingRepo);
+
+const telegramConfig = {
+    apiId: parseInt(process.env.TELEGRAM_API_ID || '0'),
+    apiHash: process.env.TELEGRAM_API_HASH || '',
+    botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+    coreGroupId: process.env.TELEGRAM_CORE_GROUP_ID || '0'
+};
+const telegramService = new TelegramService(logger, userMappingRepo, telegramConfig);
+
+const queueService = new QueueService(queueRepo, downloaderService, notificationService, telegramService, systemConfigRepo);
 const permissionService = new PermissionService(accessControlRepo);
 const forwarderService = new ForwarderService(notificationService, queueService, userMappingRepo);
 const schedulerService = new SchedulerService();
@@ -65,7 +76,8 @@ container.services = {
     queue: queueService,
     downloader: downloaderService,
     notification: notificationService,
-    scheduler: schedulerService
+    scheduler: schedulerService,
+    telegram: telegramService
 };
 
 container.controllers = {
