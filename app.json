@@ -1,0 +1,28 @@
+{
+  "name": "tiktok-notification-forwarder",
+  "description": "Production-ready Discord bot to forward TikTok notifications",
+  "repository": "https://github.com/Yoganataa/tiktok-notification-forwarder",
+  "keywords": [
+    "discord",
+    "tiktok",
+    "bot"
+  ],
+  "env": {
+    "DISCORD_TOKEN": {
+      "description": "The authentication token for your Discord bot.",
+      "required": true
+    },
+    "OWNER_ID": {
+      "description": "The Discord User ID of the bot owner.",
+      "required": true
+    },
+    "CLIENT_ID": {
+      "description": "The Client ID (Application ID) of your Discord bot.",
+      "required": true
+    },
+    "CONFIG_ENV_URL": {
+      "description": "The URL to the remote configuration file containing additional settings.",
+      "required": true
+    }
+  }
+}
