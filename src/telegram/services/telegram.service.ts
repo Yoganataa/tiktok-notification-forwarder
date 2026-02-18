@@ -4,22 +4,14 @@ import { Logger } from 'winston';
 import { UserMappingRepository } from '../../core/repositories/user-mapping.repository';
 
 export class TelegramService {
-    private client: TelegramClient;
+    private client: TelegramClient | null = null;
     private mainGroupId: any = null; // BigInt or String
 
     constructor(
         private logger: Logger,
         private mappingRepo: UserMappingRepository,
         private config: { apiId: number | null; apiHash: string | null; session: string | null; coreGroupId: string | null }
-    ) {
-        // Initialize with session if present, or empty. The check happens in init().
-        this.client = new TelegramClient(
-            new StringSession(config.session || ""),
-            config.apiId || 0,
-            config.apiHash || "",
-            { connectionRetries: 5 }
-        );
-    }
+    ) {}
 
     async init() {
         if (!this.config.apiId || !this.config.apiHash || !this.config.session || !this.config.coreGroupId) {
@@ -30,6 +22,14 @@ export class TelegramService {
         this.logger.info('Connecting to Telegram MTProto...');
 
         try {
+            // Initialize client here using the LATEST config values (populated from DB)
+            this.client = new TelegramClient(
+                new StringSession(this.config.session),
+                this.config.apiId,
+                this.config.apiHash,
+                { connectionRetries: 5 }
+            );
+
             // Connect using the provided session string (User Client)
             await this.client.connect();
 
@@ -40,16 +40,17 @@ export class TelegramService {
             } else {
                 this.logger.error('❌ Telegram Authorization Failed. Please check the session string.');
                 // Don't throw here to avoid crashing the whole bot, just functionality disabled
+                this.client = null; // Reset client on auth failure
             }
         } catch (e) {
              this.logger.error('Telegram Service initialization failed', { error: (e as Error).message });
+             this.client = null;
         }
     }
 
     async getOrCreateTopic(username: string): Promise<string | null> {
         // If not initialized properly, fail fast
-        if (!this.mainGroupId || !this.client.connected) {
-             // Optionally log debug here
+        if (!this.mainGroupId || !this.client || !this.client.connected) {
              return null;
         }
 
@@ -144,7 +145,7 @@ export class TelegramService {
     }
 
     async sendVideo(topicId: string | number, buffer: Buffer, caption: string) {
-        if (!this.mainGroupId || !this.client.connected) return;
+        if (!this.mainGroupId || !this.client || !this.client.connected) return;
 
         try {
             await this.client.sendFile(this.mainGroupId, {
@@ -161,7 +162,7 @@ export class TelegramService {
     }
 
     async sendMessage(topicId: string | number, message: string) {
-        if (!this.mainGroupId || !this.client.connected) return;
+        if (!this.mainGroupId || !this.client || !this.client.connected) return;
         try {
              await this.client.sendMessage(this.mainGroupId, {
                  message: message,

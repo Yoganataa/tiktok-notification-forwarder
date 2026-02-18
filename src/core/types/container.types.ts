@@ -14,6 +14,7 @@ import { MappingController } from '../../discord/controllers/admin/mapping.contr
 import { ConfigController } from '../../discord/controllers/admin/config.controller';
 import { RoleController } from '../../discord/controllers/admin/role.controller';
 import { DownloadController } from '../../discord/controllers/download.controller';
+import { TelegramLoginController } from '../../discord/controllers/admin/telegram-login.controller';
 
 declare module '@sapphire/pieces' {
     interface Container {
@@ -38,6 +39,7 @@ declare module '@sapphire/pieces' {
             config: ConfigController;
             role: RoleController;
             download: DownloadController;
+            telegramLogin: TelegramLoginController;
         };
     }
 }
