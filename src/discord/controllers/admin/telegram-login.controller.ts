@@ -206,14 +206,9 @@ export class TelegramLoginController {
             if (is2FA) {
                 if (password) {
                     try {
-                        // Attempt 2FA Login using helper (best effort)
-                        await (session.client as any).signIn({
-                            password: password,
-                            phoneNumber: session.phone,
-                            phoneCodeHash: session.phoneCodeHash,
-                            phoneCode: phoneCode
-                        });
-
+                        // FIX: Use checkPassword instead of signIn for SRP handling
+                        // Cast to any to bypass type issues with the installed version
+                        await (session.client as any).checkPassword(password);
                         await this.finalizeLogin(interaction, session);
                     } catch (pwError) {
                         logger.error('Telegram Login Error (2FA)', pwError);
