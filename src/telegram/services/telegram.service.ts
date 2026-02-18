@@ -10,10 +10,10 @@ export class TelegramService {
     constructor(
         private logger: Logger,
         private mappingRepo: UserMappingRepository,
-        private config: { apiId: number; apiHash: string; botToken: string; coreGroupId: string }
+        private config: { apiId: number; apiHash: string; session: string; coreGroupId: string }
     ) {
         this.client = new TelegramClient(
-            new StringSession(""),
+            new StringSession(config.session),
             config.apiId,
             config.apiHash,
             { connectionRetries: 5 }
@@ -22,9 +22,9 @@ export class TelegramService {
 
     async init() {
         this.logger.info('Connecting to Telegram MTProto...');
-        await this.client.start({
-            botAuthToken: this.config.botToken,
-        });
+
+        // Connect using the provided session string (User Client)
+        await this.client.connect();
 
         try {
             this.mainGroupId = BigInt(this.config.coreGroupId);
@@ -33,7 +33,12 @@ export class TelegramService {
             throw new Error(`Invalid Core Group ID: ${this.config.coreGroupId}`);
         }
 
-        this.logger.info('✅ Telegram Service Connected');
+        if (await this.client.checkAuthorization()) {
+             this.logger.info('✅ Telegram Service Connected (User Session)');
+        } else {
+             this.logger.error('❌ Telegram Authorization Failed. Please check the session string.');
+             throw new Error('Telegram Authorization Failed');
+        }
     }
 
     async getOrCreateTopic(username: string): Promise<string | null> {
@@ -84,12 +89,9 @@ export class TelegramService {
                 }
 
                 // Prepare next page logic
-                // GramJS pagination requires careful handling.
-                // We usually just need to update offsetId/offsetTopic from the last item.
                 const lastTopic = topicsResult.topics[topicsResult.topics.length - 1];
                 if (lastTopic) {
                     offsetId = lastTopic.id;
-                    // offsetTopic = lastTopic.id; // Sometimes redundant but depends on API specifics
                 }
 
                 if (topicsResult.topics.length < 100) {

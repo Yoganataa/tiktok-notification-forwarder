@@ -31,7 +31,7 @@ export interface AppConfig {
   telegram: {
       apiId: number;
       apiHash: string;
-      botToken: string;
+      session: string; // Changed from botToken
       coreGroupId: string;
   };
   database: {
@@ -91,7 +91,7 @@ class ConfigManager {
       telegram: {
         apiId: parseInt(process.env.TELEGRAM_API_ID || '0'),
         apiHash: process.env.TELEGRAM_API_HASH || '',
-        botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+        session: process.env.TELEGRAM_SESSION || '', // New
         coreGroupId: process.env.TELEGRAM_CORE_GROUP_ID || '0'
       },
       database: {
