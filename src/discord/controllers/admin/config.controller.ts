@@ -39,6 +39,7 @@ export class ConfigController {
         { name: 'Identity', value: 'Core Server, Fallback Channel', inline: true },
         { name: 'Logic', value: 'Source Bots, Manual Mode', inline: true },
         { name: 'Downloader', value: 'Engine, Cookie, Auto-DL', inline: true },
+        { name: 'Telegram', value: 'API ID, Hash, Session, Group', inline: true }, // Added Telegram
         { name: 'System', value: 'Update Repo, Log Level', inline: true }
       );
 
@@ -49,12 +50,20 @@ export class ConfigController {
         new StringSelectMenuOptionBuilder().setLabel('Core Identity').setValue('cat_identity').setDescription('Server ID, Fallback Channel, Auto-Category').setEmoji('🆔'),
         new StringSelectMenuOptionBuilder().setLabel('Bot Logic').setValue('cat_logic').setDescription('Source Bots, Extra Guilds, Manual Mode').setEmoji('🤖'),
         new StringSelectMenuOptionBuilder().setLabel('Downloader').setValue('cat_downloader').setDescription('Engine, Cookie, Auto-Download').setEmoji('⬇️'),
+        new StringSelectMenuOptionBuilder().setLabel('Telegram Config').setValue('cat_telegram').setDescription('API Credentials, Session String').setEmoji('✈️'), // Added Telegram
         new StringSelectMenuOptionBuilder().setLabel('System & Updates').setValue('cat_system').setDescription('Upstream Repo, Branch, Log Level, JRMA').setEmoji('⚙️')
       );
 
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+    const restartBtn = new ButtonBuilder()
+        .setCustomId('btn_restart_bot')
+        .setLabel('Restart Bot')
+        .setStyle(ButtonStyle.Danger)
+        .setEmoji('🔁');
 
-    const payload = { embeds: [embed], components: [row], ephemeral: true };
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+    const rowBtns = new ActionRowBuilder<ButtonBuilder>().addComponents(restartBtn);
+
+    const payload = { embeds: [embed], components: [row, rowBtns], ephemeral: true };
 
     if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
         await interaction.reply(payload);
@@ -76,10 +85,25 @@ export class ConfigController {
       case 'cat_downloader':
         await this.showDownloaderModal(interaction);
         break;
+      case 'cat_telegram':
+        await this.showTelegramModal(interaction);
+        break;
       case 'cat_system':
         await this.showSystemModal(interaction);
         break;
     }
+  }
+
+  async handleButton(interaction: ButtonInteraction): Promise<void> {
+      if (interaction.customId === 'btn_restart_bot') {
+          await interaction.reply({ content: '🔁 Restarting bot process...', ephemeral: true });
+          // Give time for reply to send
+          setTimeout(() => {
+              process.exit(0); // PM2 or Docker will restart it
+          }, 1000);
+          return;
+      }
+      // ... handle other buttons if any ...
   }
 
   // --- Modals ---
@@ -130,6 +154,25 @@ export class ConfigController {
       new ActionRowBuilder<TextInputBuilder>().addComponents(engineInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(autoDlInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(cookieInput)
+    );
+
+    await interaction.showModal(modal);
+  }
+
+  async showTelegramModal(interaction: StringSelectMenuInteraction): Promise<void> {
+    const config = configManager.get();
+    const modal = new ModalBuilder().setCustomId('setup_modal_telegram').setTitle('Telegram Configuration');
+
+    const apiIdInput = new TextInputBuilder().setCustomId('TELEGRAM_API_ID').setLabel('API ID').setStyle(TextInputStyle.Short).setValue(config.telegram.apiId ? config.telegram.apiId.toString() : '').setRequired(false);
+    const apiHashInput = new TextInputBuilder().setCustomId('TELEGRAM_API_HASH').setLabel('API Hash').setStyle(TextInputStyle.Short).setValue(config.telegram.apiHash || '').setRequired(false);
+    const sessionInput = new TextInputBuilder().setCustomId('TELEGRAM_SESSION').setLabel('String Session (Run npm run session)').setStyle(TextInputStyle.Paragraph).setValue(config.telegram.session || '').setRequired(false);
+    const groupInput = new TextInputBuilder().setCustomId('TELEGRAM_CORE_GROUP_ID').setLabel('Core Group ID').setStyle(TextInputStyle.Short).setValue(config.telegram.coreGroupId || '').setRequired(false);
+
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(apiIdInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(apiHashInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(sessionInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(groupInput)
     );
 
     await interaction.showModal(modal);
@@ -204,6 +247,24 @@ export class ConfigController {
 
     await this.onConfigReload();
     await interaction.editReply('✅ **Downloader Config Updated!**');
+    await this.showConfigMenu(interaction);
+  }
+
+  async handleTelegramSubmit(interaction: ModalSubmitInteraction): Promise<void> {
+    await interaction.deferReply({ ephemeral: true });
+
+    const apiId = interaction.fields.getTextInputValue('TELEGRAM_API_ID');
+    const apiHash = interaction.fields.getTextInputValue('TELEGRAM_API_HASH');
+    const session = interaction.fields.getTextInputValue('TELEGRAM_SESSION');
+    const group = interaction.fields.getTextInputValue('TELEGRAM_CORE_GROUP_ID');
+
+    if (apiId) await this.systemConfigRepo.set('TELEGRAM_API_ID', apiId);
+    if (apiHash) await this.systemConfigRepo.set('TELEGRAM_API_HASH', apiHash);
+    if (session) await this.systemConfigRepo.set('TELEGRAM_SESSION', session);
+    if (group) await this.systemConfigRepo.set('TELEGRAM_CORE_GROUP_ID', group);
+
+    await this.onConfigReload();
+    await interaction.editReply('✅ **Telegram Config Updated!**\nRestart the bot to apply connection changes.');
     await this.showConfigMenu(interaction);
   }
 
