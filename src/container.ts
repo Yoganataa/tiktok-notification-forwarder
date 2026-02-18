@@ -60,7 +60,8 @@ const menuController = new MenuController(
     userMappingRepo,
     configController,
     mappingController,
-    roleController
+    roleController,
+    telegramLoginController // Injected properly
 );
 
 // 4. Register to Sapphire Container

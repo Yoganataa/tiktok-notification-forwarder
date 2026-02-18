@@ -18,6 +18,7 @@ import { configManager } from '../../core/config/config';
 import { MappingController } from './admin/mapping.controller';
 import { ConfigController } from './admin/config.controller';
 import { RoleController } from './admin/role.controller';
+import { TelegramLoginController } from './admin/telegram-login.controller';
 
 export class MenuController {
   constructor(
@@ -26,7 +27,8 @@ export class MenuController {
     private userMappingRepo: UserMappingRepository,
     public configController: ConfigController,
     public mappingController: MappingController,
-    public roleController: RoleController
+    public roleController: RoleController,
+    public telegramLoginController: TelegramLoginController
   ) {}
 
   async handleButton(interaction: ButtonInteraction): Promise<void> {
@@ -123,6 +125,18 @@ export class MenuController {
         return;
     }
 
+    // Telegram Login Button
+    if (id === 'tg_btn_enter_otp') {
+        await this.telegramLoginController.showOtpModal(interaction);
+        return;
+    }
+
+    // Restart Bot Button (From Config Controller)
+    if (id === 'btn_restart_bot') {
+        await this.configController.handleButton(interaction);
+        return;
+    }
+
     if (id === 'nav_roles' || id === 'btn_add_staff' || id.startsWith('role_act_')) {
         if (id === 'nav_roles') {
             await interaction.deferUpdate();
@@ -194,6 +208,14 @@ export class MenuController {
         await this.configController.handleDownloaderSubmit(interaction);
     } else if (id === 'setup_modal_system') {
         await this.configController.handleSystemSubmit(interaction);
+    } else if (id === 'setup_modal_telegram') { // Missing in ConfigController earlier, assuming handled or needed
+        await this.configController.handleTelegramSubmit(interaction); // ConfigController must expose this or we add it
+    }
+    // --- Telegram Login Modals ---
+    else if (id === 'tg_login_step1') {
+        await this.telegramLoginController.handlePhoneSubmit(interaction);
+    } else if (id === 'tg_login_step2') {
+        await this.telegramLoginController.handleOtpSubmit(interaction);
     }
   }
 
