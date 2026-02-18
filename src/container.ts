@@ -34,6 +34,7 @@ const notificationService = new DiscordNotificationService(userMappingRepo);
 configManager.load();
 const config = configManager.get();
 
+// Pass the telegram config (which now includes session, not botToken)
 const telegramService = new TelegramService(logger, userMappingRepo, config.telegram);
 
 const queueService = new QueueService(queueRepo, downloaderService, notificationService, telegramService, systemConfigRepo);
