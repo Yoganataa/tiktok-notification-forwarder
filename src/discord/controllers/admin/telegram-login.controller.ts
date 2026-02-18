@@ -36,28 +36,28 @@ export class TelegramLoginController {
             .setCustomId('tg_login_step1')
             .setTitle('Telegram Login (Step 1/3)');
 
-        const apiIdInput = new TextInputBuilder()
-            .setCustomId('api_id')
-            .setLabel('Telegram API ID')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true);
-
-        const apiHashInput = new TextInputBuilder()
-            .setCustomId('api_hash')
-            .setLabel('Telegram API Hash')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true);
-
-        const phoneInput = new TextInputBuilder()
-            .setCustomId('phone_number')
-            .setLabel('Phone Number (+123456789)')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true);
-
         modal.addComponents(
-            new ActionRowBuilder<TextInputBuilder>().addComponents(apiIdInput),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(apiHashInput),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(phoneInput)
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('api_id')
+                    .setLabel('Telegram API ID')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+            ),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('api_hash')
+                    .setLabel('Telegram API Hash')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+            ),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('phone_number')
+                    .setLabel('Phone Number (+123456789)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+            )
         );
 
         await interaction.showModal(modal);
@@ -94,8 +94,12 @@ export class TelegramLoginController {
 
             const phoneCodeHash = (result as any).phoneCodeHash;
 
+            if (!phoneCodeHash) {
+                throw new Error('Telegram did not return phoneCodeHash.');
+            }
+
             const timeout = setTimeout(() => {
-                this.cleanupSession(userId);
+                void this.cleanupSession(userId);
             }, 120_000);
 
             this.loginSessions.set(userId, {
@@ -183,6 +187,11 @@ export class TelegramLoginController {
             const msg = (err as Error).message;
 
             if (msg.includes('SESSION_PASSWORD_NEEDED')) {
+                if (!password) {
+                    await interaction.editReply('❌ 2FA password required.');
+                    return;
+                }
+
                 const pw = await session.client.invoke(new Api.account.GetPassword());
                 const check = await computeCheck(pw, password);
 
@@ -207,13 +216,12 @@ export class TelegramLoginController {
 
         await this.systemConfigRepo.set('TELEGRAM_API_ID', session.apiId.toString());
         await this.systemConfigRepo.set('TELEGRAM_API_HASH', session.apiHash);
-        // Note: We do NOT save TELEGRAM_SESSION to DB anymore.
 
         logger.info(`Telegram login success for ${interaction.user.id}`);
 
         await interaction.editReply('🎉 Login successful. Session saved to server file.');
 
-        this.cleanupSession(interaction.user.id);
+        void this.cleanupSession(interaction.user.id);
     }
 
     private async cleanupSession(userId: string): Promise<void> {

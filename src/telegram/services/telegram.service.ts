@@ -4,30 +4,52 @@ import { Logger } from 'winston';
 import { UserMappingRepository } from '../../core/repositories/user-mapping.repository';
 import { loadTelegramSession } from '../../core/utils/telegram-session.store';
 
+/**
+ * TelegramService handles persistent MTProto user session operations.
+ */
 export class TelegramService {
     private client: TelegramClient | null = null;
-    private mainGroupId: any = null; // BigInt or String
+    private mainGroupId: string | null = null; // Store as string, not bigint
 
     constructor(
         private logger: Logger,
         private mappingRepo: UserMappingRepository,
-        private config: { apiId: number | null; apiHash: string | null; session: string | null; coreGroupId: string | null }
+        private config: {
+            apiId: number | null;
+            apiHash: string | null;
+            session: string | null;
+            coreGroupId: string | null;
+        }
     ) {}
 
-    async init() {
-        // Load session from file system override
+    /**
+     * Initialize Telegram client from stored session.
+     */
+    async init(): Promise<void> {
+        if (this.client?.connected) {
+            this.logger.warn('Telegram already initialized');
+            return;
+        }
+
         const fileSession = await loadTelegramSession();
         const finalSession = fileSession || this.config.session;
 
         if (!this.config.apiId || !this.config.apiHash || !finalSession || !this.config.coreGroupId) {
-            this.logger.warn('Telegram credentials missing. Telegram service functionality will be disabled.');
+            this.logger.warn('Telegram credentials missing. Telegram service disabled.');
             return;
         }
+
+        // Validate group ID but keep as string
+        if (!/^-?\d+$/.test(this.config.coreGroupId)) {
+            this.logger.error('Invalid Telegram coreGroupId format');
+            return;
+        }
+
+        this.mainGroupId = this.config.coreGroupId;
 
         this.logger.info('Connecting to Telegram MTProto...');
 
         try {
-            // Initialize client here using the LATEST config values (populated from DB or File)
             this.client = new TelegramClient(
                 new StringSession(finalSession),
                 this.config.apiId,
@@ -35,91 +57,95 @@ export class TelegramService {
                 { connectionRetries: 5 }
             );
 
-            // Connect using the provided session string (User Client)
             await this.client.connect();
 
-            this.mainGroupId = BigInt(this.config.coreGroupId);
+            const authorized = await this.client.checkAuthorization();
 
-            if (await this.client.checkAuthorization()) {
-                this.logger.info('✅ Telegram Service Connected (User Session)');
-            } else {
-                this.logger.error('❌ Telegram Authorization Failed. Please check the session string.');
-                // Don't throw here to avoid crashing the whole bot, just functionality disabled
-                this.client = null; // Reset client on auth failure
+            if (!authorized) {
+                this.logger.error('Telegram authorization failed');
+                this.client = null;
+                return;
             }
+
+            this.logger.info('✅ Telegram Service Connected');
+
         } catch (e) {
-             this.logger.error('Telegram Service initialization failed', { error: (e as Error).message });
-             this.client = null;
+            const err = e as Error;
+            this.logger.error('Telegram initialization failed', { error: err.message });
+            this.client = null;
         }
     }
 
-    async getOrCreateTopic(username: string): Promise<string | null> {
-        // If not initialized properly, fail fast
-        if (!this.mainGroupId || !this.client || !this.client.connected) {
-             return null;
+    /**
+     * Ensure Telegram client is usable.
+     */
+    private async ensureReady(): Promise<boolean> {
+        if (!this.client || !this.mainGroupId) return false;
+
+        try {
+            return await this.client.checkAuthorization();
+        } catch {
+            return false;
         }
+    }
+
+    /**
+     * Get or create forum topic for a username.
+     */
+    async getOrCreateTopic(username: string): Promise<string | null> {
+        if (!(await this.ensureReady())) return null;
 
         const mapping = await this.mappingRepo.findByUsername(username);
 
-        // Return existing ID if present
-        if (mapping && mapping.telegram_topic_id) {
+        if (mapping?.telegram_topic_id) {
             return String(mapping.telegram_topic_id);
         }
 
         const targetTitle = `🎥 ${username}`;
 
         try {
-            // 1. Pagination Search (Split-Brain Fix)
             let offsetId = 0;
             let offsetDate = 0;
             let offsetTopic = 0;
             let foundTopicId: string | null = null;
             let hasMore = true;
 
-            // Loop through all topics
             while (hasMore) {
-                // @ts-ignore - GramJS typing issues with Api.messages.ForumTopics vs Api.TypeForumTopics
-                const topicsResult = await this.client.invoke(
+                const topicsResult = await this.client!.invoke(
+                    // @ts-ignore gramJS typing issue
                     new Api.channels.GetForumTopics({
                         channel: this.mainGroupId,
-                        offsetDate: offsetDate,
-                        offsetId: offsetId,
-                        offsetTopic: offsetTopic,
+                        offsetDate,
+                        offsetId,
+                        offsetTopic,
                         limit: 100
                     })
                 ) as any;
 
-                if (!topicsResult || !topicsResult.topics || topicsResult.topics.length === 0) {
-                    hasMore = false;
+                if (!topicsResult?.topics?.length) break;
+
+                const existing = topicsResult.topics.find(
+                    (t: any) => t.title === targetTitle
+                );
+
+                if (existing) {
+                    foundTopicId = String(existing.id);
                     break;
                 }
 
-                // Check this batch
-                const existingTopic = topicsResult.topics.find((t: any) => t.title === targetTitle);
-                if (existingTopic) {
-                    foundTopicId = String(existingTopic.id);
-                    break;
-                }
+                const last = topicsResult.topics.at(-1);
+                if (last) offsetId = last.id;
 
-                // Prepare next page logic
-                const lastTopic = topicsResult.topics[topicsResult.topics.length - 1];
-                if (lastTopic) {
-                    offsetId = lastTopic.id;
-                }
-
-                if (topicsResult.topics.length < 100) {
-                    hasMore = false;
-                }
+                if (topicsResult.topics.length < 100) hasMore = false;
             }
 
             if (foundTopicId) {
-                this.logger.info(`Found existing Telegram Topic for ${username}: ${foundTopicId}. Syncing DB...`);
+                this.logger.info(`Found topic for ${username}: ${foundTopicId}`);
                 await this.mappingRepo.updateTelegramTopic(username, foundTopicId);
                 return foundTopicId;
             }
 
-            // 2. Create New Topic
-            const result = await this.client.invoke(
+            const result = await this.client!.invoke(
                 new Api.channels.CreateForumTopic({
                     channel: this.mainGroupId,
                     title: targetTitle,
@@ -127,55 +153,62 @@ export class TelegramService {
                 })
             ) as Api.Updates;
 
-            // 3. Robust Extraction
-            const update = result.updates.find((u: any) => u.className === 'UpdateChannelForumTopic') as any;
+            const update = result.updates.find(
+                (u: any) => u.className === 'UpdateChannelForumTopic'
+            ) as any;
 
             if (!update) {
-                 throw new Error("Failed to find UpdateChannelForumTopic in response");
+                throw new Error('Topic creation update missing');
             }
 
             const topicId = String(update.id || update.topicId);
 
-            // Save to DB
             await this.mappingRepo.updateTelegramTopic(username, topicId);
 
-            this.logger.info(`Created Telegram Topic for ${username}: ${topicId}`);
+            this.logger.info(`Created topic for ${username}: ${topicId}`);
             return topicId;
 
         } catch (error) {
-            const errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error));
-            this.logger.error('Failed to get/create Telegram topic', { error: errorDetails });
+            const err = JSON.stringify(error, Object.getOwnPropertyNames(error));
+            this.logger.error('Topic create/search failed', { error: err });
             return null;
         }
     }
 
-    async sendVideo(topicId: string | number, buffer: Buffer, caption: string) {
-        if (!this.mainGroupId || !this.client || !this.client.connected) return;
+    /**
+     * Send video into a forum topic.
+     */
+    async sendVideo(topicId: string | number, buffer: Buffer, caption: string): Promise<void> {
+        if (!(await this.ensureReady())) return;
 
         try {
-            await this.client.sendFile(this.mainGroupId, {
+            await this.client!.sendFile(this.mainGroupId!, {
                 file: buffer,
-                caption: caption,
-                replyTo: parseInt(String(topicId)),
+                caption,
+                replyTo: Number(topicId),
                 forceDocument: false,
-                supportsStreaming: true,
+                supportsStreaming: true
             });
         } catch (error) {
-             const errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error));
-             this.logger.error('Failed to send video to Telegram', { error: errorDetails });
+            const err = JSON.stringify(error, Object.getOwnPropertyNames(error));
+            this.logger.error('Failed to send video', { error: err });
         }
     }
 
-    async sendMessage(topicId: string | number, message: string) {
-        if (!this.mainGroupId || !this.client || !this.client.connected) return;
+    /**
+     * Send text message into a forum topic.
+     */
+    async sendMessage(topicId: string | number, message: string): Promise<void> {
+        if (!(await this.ensureReady())) return;
+
         try {
-             await this.client.sendMessage(this.mainGroupId, {
-                 message: message,
-                 replyTo: parseInt(String(topicId))
-             });
+            await this.client!.sendMessage(this.mainGroupId!, {
+                message,
+                replyTo: Number(topicId)
+            });
         } catch (error) {
-            const errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error));
-            this.logger.error('Failed to send message to Telegram', { error: errorDetails });
+            const err = JSON.stringify(error, Object.getOwnPropertyNames(error));
+            this.logger.error('Failed to send message', { error: err });
         }
     }
 }

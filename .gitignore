@@ -32,6 +32,9 @@ pnpm-debug.log*
 # Spesifik nama file yang kita set di .env
 database.sqlite
 
+# Sessions
+sessions/
+
 # OS Generated Files
 .DS_Store
 .DS_Store?
