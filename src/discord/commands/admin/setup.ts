@@ -11,6 +11,7 @@ import { logger } from '../../../core/utils/logger';
     description: 'System Configuration & Setup (Owner Only)',
     subcommands: [
         { name: 'interactive', chatInputRun: 'interactive' },
+        { name: 'telegram-login', chatInputRun: 'telegramLogin' }, // New subcommand
         { name: 'import', chatInputRun: 'import' },
         { name: 'backup', chatInputRun: 'backup' },
         { name: 'test', chatInputRun: 'test' }
@@ -26,6 +27,11 @@ export class SetupCommand extends Subcommand {
                     sub
                         .setName('interactive')
                         .setDescription('Launch interactive setup wizard (Menu)')
+                )
+                .addSubcommand((sub) =>
+                    sub
+                        .setName('telegram-login')
+                        .setDescription('Login to Telegram securely via Discord UI (Owner Only)')
                 )
                 .addSubcommand((sub) =>
                     sub
@@ -73,6 +79,18 @@ export class SetupCommand extends Subcommand {
         } catch (error) {
             logger.error('Interactive Setup Error', error);
             await interaction.reply({ content: '❌ Failed to launch interactive setup.', ephemeral: true });
+        }
+    }
+
+    public async telegramLogin(interaction: Subcommand.ChatInputCommandInteraction) {
+        if (!await this.checkOwner(interaction)) return;
+
+        // Delegate to TelegramLoginController
+        try {
+            await this.container.controllers.telegramLogin.startLogin(interaction);
+        } catch (error) {
+            logger.error('Telegram Login Command Error', error);
+            await interaction.reply({ content: '❌ Failed to launch Telegram Login.', ephemeral: true });
         }
     }
 

@@ -17,6 +17,7 @@ import { MappingController } from './discord/controllers/admin/mapping.controlle
 import { ConfigController } from './discord/controllers/admin/config.controller';
 import { RoleController } from './discord/controllers/admin/role.controller';
 import { DownloadController } from './discord/controllers/download.controller';
+import { TelegramLoginController } from './discord/controllers/admin/telegram-login.controller';
 import { configManager } from './core/config/config';
 import { logger } from './core/utils/logger';
 
@@ -51,6 +52,7 @@ const mappingController = new MappingController(userMappingRepo);
 const configController = new ConfigController(systemConfigRepo, configManagerReload);
 const roleController = new RoleController(permissionService);
 const downloadController = new DownloadController();
+const telegramLoginController = new TelegramLoginController(systemConfigRepo);
 
 const menuController = new MenuController(
     permissionService,
@@ -84,7 +86,8 @@ container.controllers = {
     mapping: mappingController,
     config: configController,
     role: roleController,
-    download: downloadController
+    download: downloadController,
+    telegramLogin: telegramLoginController
 };
 
 export const initServices = async () => {
