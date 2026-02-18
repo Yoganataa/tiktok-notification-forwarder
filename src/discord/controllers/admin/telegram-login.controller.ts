@@ -8,13 +8,14 @@ import {
     ModalSubmitInteraction,
     ButtonInteraction,
     ChatInputCommandInteraction,
-    RepliableInteraction
+    MessageFlags
 } from 'discord.js';
 import { TelegramClient, Api } from 'telegram';
 import { StringSession } from 'telegram/sessions';
+import { computeCheck } from 'telegram/Password';
+import { saveTelegramSession } from '../../../core/utils/telegram-session.store';
 import { SystemConfigRepository } from '../../../core/repositories/system-config.repository';
 import { logger } from '../../../core/utils/logger';
-import { RPCError } from 'telegram/errors';
 
 interface LoginContext {
     client: TelegramClient;
@@ -30,7 +31,6 @@ export class TelegramLoginController {
 
     constructor(private systemConfigRepo: SystemConfigRepository) {}
 
-    // Step 1: Start Login
     async startLogin(interaction: ChatInputCommandInteraction): Promise<void> {
         const modal = new ModalBuilder()
             .setCustomId('tg_login_step1')
@@ -50,7 +50,7 @@ export class TelegramLoginController {
 
         const phoneInput = new TextInputBuilder()
             .setCustomId('phone_number')
-            .setLabel('Phone Number (e.g. +1234567890)')
+            .setLabel('Phone Number (+123456789)')
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
@@ -63,18 +63,16 @@ export class TelegramLoginController {
         await interaction.showModal(modal);
     }
 
-    // Step 2: Handle Phone -> Send Code
     async handlePhoneSubmit(interaction: ModalSubmitInteraction): Promise<void> {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const userId = interaction.user.id;
-        const apiIdStr = interaction.fields.getTextInputValue('api_id');
+        const apiId = parseInt(interaction.fields.getTextInputValue('api_id'));
         const apiHash = interaction.fields.getTextInputValue('api_hash');
         const phone = interaction.fields.getTextInputValue('phone_number');
 
-        const apiId = parseInt(apiIdStr);
         if (isNaN(apiId)) {
-            await interaction.editReply('❌ Invalid API ID. It must be a number.');
+            await interaction.editReply('❌ Invalid API ID.');
             return;
         }
 
@@ -85,30 +83,20 @@ export class TelegramLoginController {
 
             await client.connect();
 
-            // Use invoke directly for robustness
             const result = await client.invoke(
                 new Api.auth.SendCode({
                     phoneNumber: phone,
-                    apiId: apiId,
-                    apiHash: apiHash,
-                    settings: new Api.CodeSettings({
-                        allowFlashcall: false,
-                        currentNumber: true,
-                        allowAppHash: false
-                    })
+                    apiId,
+                    apiHash,
+                    settings: new Api.CodeSettings({})
                 })
             );
 
-            // Access phoneCodeHash safely
             const phoneCodeHash = (result as any).phoneCodeHash;
-
-            if (!phoneCodeHash) {
-                throw new Error('Failed to retrieve phoneCodeHash from Telegram.');
-            }
 
             const timeout = setTimeout(() => {
                 this.cleanupSession(userId);
-            }, 120 * 1000);
+            }, 120_000);
 
             this.loginSessions.set(userId, {
                 client,
@@ -122,137 +110,118 @@ export class TelegramLoginController {
             const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
                 new ButtonBuilder()
                     .setCustomId('tg_btn_enter_otp')
-                    .setLabel('Enter OTP Code')
+                    .setLabel('Enter OTP')
                     .setStyle(ButtonStyle.Primary)
-                    .setEmoji('🔑')
             );
 
             await interaction.editReply({
-                content: `✅ Code sent to ${phone}!\nPlease check your Telegram app and click below to enter the code.`,
+                content: `✅ Code sent to ${phone}`,
                 components: [row]
             });
 
         } catch (error) {
-            logger.error('Telegram Login Error (Send Code)', error);
-            await interaction.editReply(`❌ Failed to send code: ${(error as Error).message}`);
+            logger.error('Send code failed', error);
+            await interaction.editReply(`❌ ${(error as Error).message}`);
         }
     }
 
-    // Step 3: Show OTP Modal
     async showOtpModal(interaction: ButtonInteraction): Promise<void> {
-        const userId = interaction.user.id;
-        if (!this.loginSessions.has(userId)) {
-            await interaction.reply({ content: '❌ Session expired. Please start over.', ephemeral: true });
+        if (!this.loginSessions.has(interaction.user.id)) {
+            await interaction.reply({
+                content: '❌ Session expired.',
+                flags: MessageFlags.Ephemeral
+            });
             return;
         }
 
         const modal = new ModalBuilder()
             .setCustomId('tg_login_step2')
-            .setTitle('Enter OTP Code');
-
-        const otpInput = new TextInputBuilder()
-            .setCustomId('otp_code')
-            .setLabel('OTP Code')
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('12345')
-            .setRequired(true);
-
-        const passwordInput = new TextInputBuilder()
-            .setCustomId('2fa_password')
-            .setLabel('2FA Password (If enabled)')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false);
+            .setTitle('Enter OTP');
 
         modal.addComponents(
-            new ActionRowBuilder<TextInputBuilder>().addComponents(otpInput),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(passwordInput)
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('otp_code')
+                    .setLabel('OTP Code')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+            ),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('2fa_password')
+                    .setLabel('2FA Password (optional)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(false)
+            )
         );
 
         await interaction.showModal(modal);
     }
 
-    // Step 4: Handle OTP/Password -> Login
     async handleOtpSubmit(interaction: ModalSubmitInteraction): Promise<void> {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const userId = interaction.user.id;
-        const session = this.loginSessions.get(userId);
-
-        if (!session || !session.phoneCodeHash) {
-            await interaction.editReply('❌ Session expired or invalid. Please start over.');
+        const session = this.loginSessions.get(interaction.user.id);
+        if (!session) {
+            await interaction.editReply('❌ Session expired.');
             return;
         }
 
-        const phoneCode = interaction.fields.getTextInputValue('otp_code');
+        const otp = interaction.fields.getTextInputValue('otp_code');
         const password = interaction.fields.getTextInputValue('2fa_password');
 
         try {
-            // Attempt Sign In
             await session.client.invoke(
                 new Api.auth.SignIn({
                     phoneNumber: session.phone,
-                    phoneCodeHash: session.phoneCodeHash,
-                    phoneCode: phoneCode
+                    phoneCodeHash: session.phoneCodeHash!,
+                    phoneCode: otp
                 })
             );
 
-            await this.finalizeLogin(interaction, session);
+        } catch (err) {
+            const msg = (err as Error).message;
 
-        } catch (error) {
-            // Check for 2FA error string if class is missing
-            const errorMessage = (error as Error).message || '';
-            const is2FA = errorMessage.includes('SESSION_PASSWORD_NEEDED'); // Standard error code check
+            if (msg.includes('SESSION_PASSWORD_NEEDED')) {
+                const pw = await session.client.invoke(new Api.account.GetPassword());
+                const check = await computeCheck(pw, password);
 
-            if (is2FA) {
-                if (password) {
-                    try {
-                        // FIX: Use checkPassword instead of signIn for SRP handling
-                        // Cast to any to bypass type issues with the installed version
-                        await (session.client as any).checkPassword(password);
-                        await this.finalizeLogin(interaction, session);
-                    } catch (pwError) {
-                        logger.error('Telegram Login Error (2FA)', pwError);
-                        await interaction.editReply(`❌ Login failed (Invalid Password?): ${(pwError as Error).message}`);
-                    }
-                } else {
-                    await interaction.editReply('⚠️ 2FA Password is required (SESSION_PASSWORD_NEEDED) but was not provided. Please try again.');
-                }
+                await session.client.invoke(
+                    new Api.auth.CheckPassword({ password: check })
+                );
             } else {
-                logger.error('Telegram Login Error (Sign In)', error);
-                await interaction.editReply(`❌ Login failed: ${(error as Error).message}`);
+                throw err;
             }
         }
+
+        await this.finalizeLogin(interaction, session);
     }
 
-    private async finalizeLogin(interaction: ModalSubmitInteraction, session: LoginContext): Promise<void> {
-        try {
-            // Save Session
-            const sessionString = session.client.session.save() as unknown as string;
+    private async finalizeLogin(
+        interaction: ModalSubmitInteraction,
+        session: LoginContext
+    ): Promise<void> {
+        const sessionString = session.client.session.save() as unknown as string;
 
-            await this.systemConfigRepo.set('TELEGRAM_API_ID', session.apiId.toString());
-            await this.systemConfigRepo.set('TELEGRAM_API_HASH', session.apiHash);
-            await this.systemConfigRepo.set('TELEGRAM_SESSION', sessionString);
+        await saveTelegramSession(sessionString);
 
-            logger.info(`Telegram login successful for user ${interaction.user.id}`);
+        await this.systemConfigRepo.set('TELEGRAM_API_ID', session.apiId.toString());
+        await this.systemConfigRepo.set('TELEGRAM_API_HASH', session.apiHash);
+        // Note: We do NOT save TELEGRAM_SESSION to DB anymore.
 
-            await interaction.editReply('🎉 **Login Successful!**\nConfiguration has been saved to the database.\n\n⚠️ **IMPORTANT:** Please restart the bot to apply changes.');
+        logger.info(`Telegram login success for ${interaction.user.id}`);
 
-            this.cleanupSession(interaction.user.id);
+        await interaction.editReply('🎉 Login successful. Session saved to server file.');
 
-        } catch (error) {
-            logger.error('Telegram Login Error (Finalize)', error);
-            await interaction.editReply('❌ Login succeeded but failed to save configuration.');
-        }
+        this.cleanupSession(interaction.user.id);
     }
 
-    private async cleanupSession(userId: string) {
+    private async cleanupSession(userId: string): Promise<void> {
         const session = this.loginSessions.get(userId);
-        if (session) {
-            clearTimeout(session.timeout);
-            try {
-                await session.client.disconnect();
-            } catch (e) { /* ignore */ }
-            this.loginSessions.delete(userId);
-        }
+        if (!session) return;
+
+        clearTimeout(session.timeout);
+        await session.client.disconnect();
+        this.loginSessions.delete(userId);
     }
 }
