@@ -2,6 +2,7 @@ import { TelegramClient, Api } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { Logger } from 'winston';
 import { UserMappingRepository } from '../../core/repositories/user-mapping.repository';
+import { loadTelegramSession } from '../../core/utils/telegram-session.store';
 
 export class TelegramService {
     private client: TelegramClient | null = null;
@@ -14,7 +15,11 @@ export class TelegramService {
     ) {}
 
     async init() {
-        if (!this.config.apiId || !this.config.apiHash || !this.config.session || !this.config.coreGroupId) {
+        // Load session from file system override
+        const fileSession = await loadTelegramSession();
+        const finalSession = fileSession || this.config.session;
+
+        if (!this.config.apiId || !this.config.apiHash || !finalSession || !this.config.coreGroupId) {
             this.logger.warn('Telegram credentials missing. Telegram service functionality will be disabled.');
             return;
         }
@@ -22,9 +27,9 @@ export class TelegramService {
         this.logger.info('Connecting to Telegram MTProto...');
 
         try {
-            // Initialize client here using the LATEST config values (populated from DB)
+            // Initialize client here using the LATEST config values (populated from DB or File)
             this.client = new TelegramClient(
-                new StringSession(this.config.session),
+                new StringSession(finalSession),
                 this.config.apiId,
                 this.config.apiHash,
                 { connectionRetries: 5 }
