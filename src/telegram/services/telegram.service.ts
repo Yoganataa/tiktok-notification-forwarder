@@ -10,47 +10,54 @@ export class TelegramService {
     constructor(
         private logger: Logger,
         private mappingRepo: UserMappingRepository,
-        private config: { apiId: number; apiHash: string; session: string; coreGroupId: string }
+        private config: { apiId: number | null; apiHash: string | null; session: string | null; coreGroupId: string | null }
     ) {
+        // Initialize with session if present, or empty. The check happens in init().
         this.client = new TelegramClient(
-            new StringSession(config.session),
-            config.apiId,
-            config.apiHash,
+            new StringSession(config.session || ""),
+            config.apiId || 0,
+            config.apiHash || "",
             { connectionRetries: 5 }
         );
     }
 
     async init() {
-        this.logger.info('Connecting to Telegram MTProto...');
-
-        // Connect using the provided session string (User Client)
-        await this.client.connect();
-
-        try {
-            this.mainGroupId = BigInt(this.config.coreGroupId);
-        } catch (e) {
-            this.logger.error('Invalid Core Group ID for Telegram', { error: (e as Error).message });
-            throw new Error(`Invalid Core Group ID: ${this.config.coreGroupId}`);
+        if (!this.config.apiId || !this.config.apiHash || !this.config.session || !this.config.coreGroupId) {
+            this.logger.warn('Telegram credentials missing. Telegram service functionality will be disabled.');
+            return;
         }
 
-        if (await this.client.checkAuthorization()) {
-             this.logger.info('✅ Telegram Service Connected (User Session)');
-        } else {
-             this.logger.error('❌ Telegram Authorization Failed. Please check the session string.');
-             throw new Error('Telegram Authorization Failed');
+        this.logger.info('Connecting to Telegram MTProto...');
+
+        try {
+            // Connect using the provided session string (User Client)
+            await this.client.connect();
+
+            this.mainGroupId = BigInt(this.config.coreGroupId);
+
+            if (await this.client.checkAuthorization()) {
+                this.logger.info('✅ Telegram Service Connected (User Session)');
+            } else {
+                this.logger.error('❌ Telegram Authorization Failed. Please check the session string.');
+                // Don't throw here to avoid crashing the whole bot, just functionality disabled
+            }
+        } catch (e) {
+             this.logger.error('Telegram Service initialization failed', { error: (e as Error).message });
         }
     }
 
     async getOrCreateTopic(username: string): Promise<string | null> {
+        // If not initialized properly, fail fast
+        if (!this.mainGroupId || !this.client.connected) {
+             // Optionally log debug here
+             return null;
+        }
+
         const mapping = await this.mappingRepo.findByUsername(username);
 
         // Return existing ID if present
         if (mapping && mapping.telegram_topic_id) {
             return String(mapping.telegram_topic_id);
-        }
-
-        if (!this.mainGroupId) {
-             throw new Error("Main Group ID not initialized");
         }
 
         const targetTitle = `🎥 ${username}`;
@@ -74,7 +81,7 @@ export class TelegramService {
                         offsetTopic: offsetTopic,
                         limit: 100
                     })
-                ) as any; // Using any to bypass strict type checking on return for now, as types are complex union
+                ) as any;
 
                 if (!topicsResult || !topicsResult.topics || topicsResult.topics.length === 0) {
                     hasMore = false;
@@ -115,13 +122,9 @@ export class TelegramService {
             ) as Api.Updates;
 
             // 3. Robust Extraction
-            // Find the specific update class
-            // Check for UpdateChannelForumTopic
             const update = result.updates.find((u: any) => u.className === 'UpdateChannelForumTopic') as any;
 
             if (!update) {
-                 // Try looking for generic update with topicId if specific class not found immediately?
-                 // But className check is safest.
                  throw new Error("Failed to find UpdateChannelForumTopic in response");
             }
 
@@ -134,7 +137,6 @@ export class TelegramService {
             return topicId;
 
         } catch (error) {
-            // Improved Logging
             const errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error));
             this.logger.error('Failed to get/create Telegram topic', { error: errorDetails });
             return null;
@@ -142,13 +144,13 @@ export class TelegramService {
     }
 
     async sendVideo(topicId: string | number, buffer: Buffer, caption: string) {
-        if (!this.mainGroupId) throw new Error("Main Group ID not set");
+        if (!this.mainGroupId || !this.client.connected) return;
 
         try {
             await this.client.sendFile(this.mainGroupId, {
                 file: buffer,
                 caption: caption,
-                replyTo: parseInt(String(topicId)), // GramJS uses int for reply ID, safe for topic IDs < 2^53
+                replyTo: parseInt(String(topicId)),
                 forceDocument: false,
                 supportsStreaming: true,
             });
@@ -159,7 +161,7 @@ export class TelegramService {
     }
 
     async sendMessage(topicId: string | number, message: string) {
-        if (!this.mainGroupId) throw new Error("Main Group ID not set");
+        if (!this.mainGroupId || !this.client.connected) return;
         try {
              await this.client.sendMessage(this.mainGroupId, {
                  message: message,

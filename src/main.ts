@@ -35,15 +35,23 @@ const main = async () => {
         // 5. Initialize Core Services
         await initServices();
 
-        // 6. Launch Telegram Client (Parallel)
-        logger.info('Connecting to Telegram...');
-        const telegramWrapper = new TelegramClientWrapper();
-        const telegramPromise = telegramWrapper.login().catch(e => {
-            logger.error('Failed to connect to Telegram', { error: (e as Error).message });
-        });
+        // 6. Launch Telegram Client (Parallel, Conditional)
+        const telegramConfig = configManager.get().telegram;
+        let telegramPromise: Promise<void> | undefined;
+
+        if (telegramConfig.apiId && telegramConfig.apiHash && telegramConfig.session && telegramConfig.coreGroupId) {
+            logger.info('Connecting to Telegram...');
+            const telegramWrapper = new TelegramClientWrapper();
+            telegramPromise = telegramWrapper.login().catch(e => {
+                logger.error('Failed to connect to Telegram', { error: (e as Error).message });
+            });
+        } else {
+            logger.warn('Telegram not configured (missing credentials or session). Skipping Telegram startup.');
+            telegramPromise = Promise.resolve();
+        }
 
         // 7. Launch Discord Client (Parallel)
-        // Dynamic import to ensure container is fully set up if needed, though we imported it above.
+        // Dynamic import to ensure container is fully set up if needed
         const { DiscordClient } = await import('./discord/client');
         const discordClient = new DiscordClient();
         const discordPromise = discordClient.login().catch(e => {
@@ -53,7 +61,7 @@ const main = async () => {
 
         await Promise.all([telegramPromise, discordPromise]);
 
-        logger.info('✅ System Online: Discord and Telegram (if configured) are running.');
+        logger.info('✅ System Online: Discord is running. Telegram is ' + (telegramConfig.session ? 'running' : 'disabled') + '.');
 
     } catch (error) {
         logger.error('Failed to start application', error);

@@ -23,16 +23,16 @@ export interface AppConfig {
     fallbackChannelId: string;
     autoCreateCategoryId: string;
     manualDownloadMode: boolean;
-    autoDownload: boolean; // New
-    downloadEngine: string; // New
-    cookie: string; // New
-    jrmaRenewReminder: boolean; // New
+    autoDownload: boolean;
+    downloadEngine: string;
+    cookie: string;
+    jrmaRenewReminder: boolean;
   };
   telegram: {
-      apiId: number;
-      apiHash: string;
-      session: string; // Changed from botToken
-      coreGroupId: string;
+      apiId: number | null;
+      apiHash: string | null;
+      session: string | null;
+      coreGroupId: string | null;
   };
   database: {
     driver: DatabaseDriver;
@@ -89,10 +89,10 @@ class ConfigManager {
         jrmaRenewReminder: false,
       },
       telegram: {
-        apiId: parseInt(process.env.TELEGRAM_API_ID || '0'),
-        apiHash: process.env.TELEGRAM_API_HASH || '',
-        session: process.env.TELEGRAM_SESSION || '', // New
-        coreGroupId: process.env.TELEGRAM_CORE_GROUP_ID || '0'
+        apiId: process.env.TELEGRAM_API_ID ? parseInt(process.env.TELEGRAM_API_ID) : null,
+        apiHash: process.env.TELEGRAM_API_HASH || null,
+        session: process.env.TELEGRAM_SESSION || null,
+        coreGroupId: process.env.TELEGRAM_CORE_GROUP_ID || null
       },
       database: {
         driver: driver,
@@ -190,6 +190,23 @@ class ConfigManager {
           case 'DB_MIN_CONNECTIONS': 
             this.config!.database.minConnections = parseInt(value); 
             updatesCount++; 
+            break;
+          // Telegram DB Overrides
+          case 'TELEGRAM_API_ID':
+            this.config!.telegram.apiId = parseInt(value);
+            updatesCount++;
+            break;
+          case 'TELEGRAM_API_HASH':
+            this.config!.telegram.apiHash = value;
+            updatesCount++;
+            break;
+          case 'TELEGRAM_SESSION':
+            this.config!.telegram.session = value;
+            updatesCount++;
+            break;
+          case 'TELEGRAM_CORE_GROUP_ID':
+            this.config!.telegram.coreGroupId = value;
+            updatesCount++;
             break;
         }
       }
